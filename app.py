@@ -5,7 +5,7 @@ import json
 from io import BytesIO
 
 st.set_page_config(page_title="ITOSE - VIN Filter 0008", layout="wide")
-st.title("ITOSE Tools - VIN (Exclude Status 0008)")
+st.title("ITOSE Tools - VIN + Message (Exclude Status 0008)")
 
 # =========================
 # REGEX
@@ -34,6 +34,7 @@ def parse_vin_filter(df):
 
                     vin = data.get("vin")
                     status = str(data.get("status"))
+                    message = data.get("message")
 
                     # ❌ ตัดเฉพาะ 0008
                     if status == "0008":
@@ -41,6 +42,7 @@ def parse_vin_filter(df):
 
                     rows.append({
                         "VIN": vin,
+                        "Message": message,
                         "Status": status
                     })
 
@@ -73,7 +75,7 @@ if file1:
     # =========================
     # DISPLAY
     # =========================
-    st.subheader("VIN List (Exclude Status 0008)")
+    st.subheader("VIN + Message (Exclude Status 0008)")
 
     if df1.empty:
         st.warning("⚠️ ไม่เจอข้อมูลหลังจาก filter")
@@ -83,7 +85,7 @@ if file1:
         # 🔢 จำนวนทั้งหมด (ยังซ้ำได้)
         st.markdown(f"### 🔢 Total Rows: {len(df1)}")
 
-        # 🧠 unique VIN (ไว้เทียบเฉย ๆ)
+        # 🧠 unique VIN
         st.markdown(f"### 🧠 Unique VIN: {df1['VIN'].nunique()}")
 
     # =========================
@@ -98,5 +100,5 @@ if file1:
     st.download_button(
         "Download Excel",
         data=output,
-        file_name="vin-filter-0008.xlsx"
+        file_name="vin-message-filter-0008.xlsx"
     )
