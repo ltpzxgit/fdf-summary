@@ -4,8 +4,8 @@ import re
 import json
 from io import BytesIO
 
-st.set_page_config(page_title="ITOSE - FDF Single File", layout="wide")
-st.title("ITOSE Tools - FDFDataHub (VIN Only)")
+st.set_page_config(page_title="ITOSE - VIN Raw", layout="wide")
+st.title("ITOSE Tools - VIN Raw Extract")
 
 # =========================
 # REGEX
@@ -18,7 +18,7 @@ JSON_REGEX = r'\{.*?\}'
 def extract_json_blocks(text):
     return re.findall(JSON_REGEX, text)
 
-def parse_vin_only(df):
+def parse_vin_raw(df):
     rows = []
 
     for col in df.columns:
@@ -32,9 +32,10 @@ def parse_vin_only(df):
                 try:
                     data = json.loads(block)
 
-                    vin = data.get("vin")
-                    if vin:
-                        rows.append({"VIN": vin})
+                    # 🔥 ไม่ filter อะไรเลย เอามาหมด
+                    rows.append({
+                        "VIN": data.get("vin")
+                    })
 
                 except:
                     continue
@@ -60,35 +61,35 @@ if file1:
     # =========================
     # PARSE
     # =========================
-    df1 = parse_vin_only(df_file1)
+    df1 = parse_vin_raw(df_file1)
 
     # =========================
     # DISPLAY
     # =========================
-    st.subheader("VIN List (All Records)")
+    st.subheader("VIN Raw (No Filter)")
 
     if df1.empty:
-        st.warning("⚠️ ไม่เจอ VIN ในไฟล์นี้")
+        st.warning("⚠️ ไม่เจอ JSON ในไฟล์นี้")
     else:
-        st.dataframe(df1)
+        st.dataframe(df1, use_container_width=True)
 
-        # 🔢 นับทั้งหมด (รวมซ้ำ)
-        st.markdown(f"### 🔢 Total VIN (รวมซ้ำ): {len(df1)}")
+        # 🔢 จำนวนทั้งหมด (รวมทุกอย่าง)
+        st.markdown(f"### 🔢 Total Rows (Raw VIN): {len(df1)}")
 
-        # 🔥 bonus: นับ unique ให้ดูด้วย
-        st.markdown(f"### 🧠 Unique VIN: {df1['VIN'].nunique()}")
+        # 🧠 unique (แค่โชว์ ไม่ได้ใช้ตัด)
+        st.markdown(f"### 🧠 Unique VIN (reference): {df1['VIN'].nunique()}")
 
     # =========================
     # EXPORT
     # =========================
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df1.to_excel(writer, index=False, sheet_name='VIN_List')
+        df1.to_excel(writer, index=False, sheet_name='VIN_Raw')
 
     output.seek(0)
 
     st.download_button(
         "Download Excel",
         data=output,
-        file_name="vin-list.xlsx"
+        file_name="vin-raw.xlsx"
     )
