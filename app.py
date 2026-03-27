@@ -40,9 +40,15 @@ def parse_fdfdatahub(df):
                 except:
                     continue
 
-    df_out = pd.DataFrame(rows).drop_duplicates()
+    df_out = pd.DataFrame(rows)
 
     if not df_out.empty:
+        # ❌ ตัด VIN ว่างออก
+        df_out = df_out[df_out["VIN"].notna()]
+
+        # ✅ เอา VIN ไม่ซ้ำ (เก็บแค่ตัวแรก)
+        df_out = df_out.drop_duplicates(subset=["VIN"])
+
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
 
@@ -50,7 +56,7 @@ def parse_fdfdatahub(df):
 
 
 # =========================
-# UPLOAD (เหลือไฟล์เดียว)
+# UPLOAD
 # =========================
 file1 = st.file_uploader("Upload FDFDataHub", type=["xlsx", "csv"])
 
@@ -72,6 +78,9 @@ if file1:
         st.warning("⚠️ ไม่เจอ JSON ที่มี vin / message / status ในไฟล์นี้")
     else:
         st.dataframe(df1)
+
+        # 🔥 โชว์จำนวน VIN แบบไม่ซ้ำ
+        st.markdown(f"### 🔢 Total Unique VIN: {len(df1)}")
 
     # =========================
     # EXPORT
