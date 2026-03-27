@@ -5,7 +5,7 @@ import json
 from io import BytesIO
 
 st.set_page_config(page_title="ITOSE - FDF Single File", layout="wide")
-st.title("ITOSE Tools - FDFDataHub")
+st.title("ITOSE Tools - FDFDataHub (VIN Only)")
 
 # =========================
 # REGEX
@@ -18,7 +18,7 @@ JSON_REGEX = r'\{.*?\}'
 def extract_json_blocks(text):
     return re.findall(JSON_REGEX, text)
 
-def parse_fdfdatahub(df):
+def parse_vin_only(df):
     rows = []
 
     for col in df.columns:
@@ -32,23 +32,16 @@ def parse_fdfdatahub(df):
                 try:
                     data = json.loads(block)
 
-                    rows.append({
-                        "VIN": data.get("vin"),
-                        "Message": data.get("message"),
-                        "Status": data.get("status")
-                    })
+                    vin = data.get("vin")
+                    if vin:
+                        rows.append({"VIN": vin})
+
                 except:
                     continue
 
     df_out = pd.DataFrame(rows)
 
     if not df_out.empty:
-        # ❌ ตัด VIN ว่าง
-        df_out = df_out[df_out["VIN"].notna()]
-
-        # 🔥 สำคัญ: เอา log ล่าสุด (ตัวท้ายสุด)
-        df_out = df_out.drop_duplicates(subset=["VIN"], keep="last")
-
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
 
@@ -67,32 +60,35 @@ if file1:
     # =========================
     # PARSE
     # =========================
-    df1 = parse_fdfdatahub(df_file1)
+    df1 = parse_vin_only(df_file1)
 
     # =========================
     # DISPLAY
     # =========================
-    st.subheader("FDFDataHubLinkage")
+    st.subheader("VIN List (All Records)")
 
     if df1.empty:
-        st.warning("⚠️ ไม่เจอ JSON ที่มี vin / message / status ในไฟล์นี้")
+        st.warning("⚠️ ไม่เจอ VIN ในไฟล์นี้")
     else:
         st.dataframe(df1)
 
-        # 🔢 จำนวน VIN (unique ล่าสุด)
-        st.markdown(f"### 🔢 Total VIN (Latest Only): {len(df1)}")
+        # 🔢 นับทั้งหมด (รวมซ้ำ)
+        st.markdown(f"### 🔢 Total VIN (รวมซ้ำ): {len(df1)}")
+
+        # 🔥 bonus: นับ unique ให้ดูด้วย
+        st.markdown(f"### 🧠 Unique VIN: {df1['VIN'].nunique()}")
 
     # =========================
     # EXPORT
     # =========================
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df1.to_excel(writer, index=False, sheet_name='FDFDataHubLinkage')
+        df1.to_excel(writer, index=False, sheet_name='VIN_List')
 
     output.seek(0)
 
     st.download_button(
         "Download Excel",
         data=output,
-        file_name="fdf-datahub.xlsx"
+        file_name="vin-list.xlsx"
     )
