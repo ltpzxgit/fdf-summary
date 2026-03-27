@@ -5,7 +5,7 @@ import json
 from io import BytesIO
 
 st.set_page_config(page_title="ITOSE - FDF", layout="wide")
-st.title("ITOSE Tools - FDF (3 Files Version)")
+st.title("ITOSE Tools - FDF Summary")
 
 # =========================
 # REGEX
