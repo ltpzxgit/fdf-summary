@@ -10,13 +10,12 @@ st.title("ITOSE Tools - FDF (3 Files Version)")
 # =========================
 # REGEX
 # =========================
-DATETIME_ID_REGEX = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
+DATETIME_ID_REGEX = r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
-JSON_REGEX = r'\{.*?\}'
 KV_REGEX = r'(\w+)=([^,\s]+)'
 
 # =========================
-# EXTRACT FUNCTIONS
+# FUNCTIONS
 # =========================
 def extract_uuid(text):
     m = re.search(DATETIME_ID_REGEX, text)
@@ -26,15 +25,23 @@ def extract_request_id(text):
     m = re.search(REQUEST_ID_REGEX, text)
     return m.group(1) if m else None
 
-def extract_json(text):
-    return re.findall(JSON_REGEX, text)
-
 def extract_kv(text):
     return dict(re.findall(KV_REGEX, text))
 
+def extract_json_safe(text):
+    """หา JSON block แบบไม่พัง nested"""
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(text[start:end+1])
+        except:
+            return None
+    return None
+
 
 # =========================
-# MAIN PARSE (Sheet1)
+# MAIN PARSE
 # =========================
 def parse_fdfdatahub(df):
 
@@ -64,23 +71,19 @@ def parse_fdfdatahub(df):
                 log_map[uuid]["request_id"] = rid
 
             # JSON
-            j_blocks = extract_json(text)
-            if j_blocks:
-                try:
-                    log_map[uuid]["json"] = json.loads(j_blocks[0])
-                except:
-                    pass
+            j = extract_json_safe(text)
+            if j:
+                log_map[uuid]["json"] = j
 
-            # KV block
+            # KV
             kv = extract_kv(text)
             if kv:
                 log_map[uuid]["kv"] = kv
 
             data = log_map[uuid]
 
-            # ✅ ถ้าครบแล้ว ยิงออก row
-            if data["json"] and data["kv"]:
-
+            # ยิง row เมื่อมี JSON
+            if data["json"]:
                 rows.append({
                     "UUID": uuid,
                     "Request ID": data["request_id"],
@@ -90,20 +93,19 @@ def parse_fdfdatahub(df):
                     "Message": data["json"].get("message"),
                     "Status": data["json"].get("status"),
 
-                    # KV MAP
-                    "DeviceID": data["kv"].get("deviceId"),
-                    "ModelCode": data["kv"].get("modelCode"),
-                    "ModelSuffix": data["kv"].get("modelSuffix"),
-                    "Brand": data["kv"].get("brand"),
-                    "DCMFlag": data["kv"].get("dcmFlag"),
-                    "RewriteFlag": data["kv"].get("rewriteFlag"),
-                    "VehicleFlag": data["kv"].get("vehicleFlag"),
-                    "SendingTime": data["kv"].get("sendingTime"),
+                    # KV
+                    "DeviceID": (data["kv"] or {}).get("deviceId"),
+                    "ModelCode": (data["kv"] or {}).get("modelCode"),
+                    "ModelSuffix": (data["kv"] or {}).get("modelSuffix"),
+                    "Brand": (data["kv"] or {}).get("brand"),
+                    "DCMFlag": (data["kv"] or {}).get("dcmFlag"),
+                    "RewriteFlag": (data["kv"] or {}).get("rewriteFlag"),
+                    "VehicleFlag": (data["kv"] or {}).get("vehicleFlag"),
+                    "SendingTime": (data["kv"] or {}).get("sendingTime"),
                 })
 
-                # reset กัน duplicate
+                # reset JSON กัน duplicate
                 log_map[uuid]["json"] = None
-                log_map[uuid]["kv"] = None
 
     df_out = pd.DataFrame(rows).drop_duplicates()
     df_out = df_out.reset_index(drop=True)
@@ -135,6 +137,9 @@ if file1 and file2 and file3:
     # SHEET 1
     # =========================
     df1 = parse_fdfdatahub(df_file1)
+
+    if df1.empty:
+        st.warning("⚠️ Sheet1 ว่าง → ลองเช็ค format log หรือ regex")
 
     # =========================
     # SHEET 2
