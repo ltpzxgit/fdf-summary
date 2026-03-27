@@ -4,8 +4,8 @@ import re
 import json
 from io import BytesIO
 
-st.set_page_config(page_title="ITOSE - VIN Filter 0008", layout="wide")
-st.title("ITOSE Tools - VIN + Message (Exclude Status 0008)")
+st.set_page_config(page_title="ITOSE - VIN Latest", layout="wide")
+st.title("ITOSE Tools - VIN Latest (Include 0008)")
 
 # =========================
 # REGEX
@@ -18,7 +18,7 @@ JSON_REGEX = r'\{.*?\}'
 def extract_json_blocks(text):
     return re.findall(JSON_REGEX, text)
 
-def parse_vin_filter(df):
+def parse_vin_latest(df):
     rows = []
 
     for col in df.columns:
@@ -32,18 +32,10 @@ def parse_vin_filter(df):
                 try:
                     data = json.loads(block)
 
-                    vin = data.get("vin")
-                    status = str(data.get("status"))
-                    message = data.get("message")
-
-                    # ❌ ตัดเฉพาะ 0008
-                    if status == "0008":
-                        continue
-
                     rows.append({
-                        "VIN": vin,
-                        "Message": message,
-                        "Status": status
+                        "VIN": data.get("vin"),
+                        "Message": data.get("message"),
+                        "Status": str(data.get("status"))
                     })
 
                 except:
@@ -52,6 +44,12 @@ def parse_vin_filter(df):
     df_out = pd.DataFrame(rows)
 
     if not df_out.empty:
+        # ❌ ตัด VIN ว่าง
+        df_out = df_out[df_out["VIN"].notna()]
+
+        # 🔥 เอา log ล่าสุดต่อ VIN
+        df_out = df_out.drop_duplicates(subset=["VIN"], keep="last")
+
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
 
@@ -70,35 +68,32 @@ if file1:
     # =========================
     # PARSE
     # =========================
-    df1 = parse_vin_filter(df_file1)
+    df1 = parse_vin_latest(df_file1)
 
     # =========================
     # DISPLAY
     # =========================
-    st.subheader("FDFDataHubLinkage")
+    st.subheader("VIN Latest (Include 0008)")
 
     if df1.empty:
-        st.warning("⚠️ ไม่เจอข้อมูลหลังจาก filter")
+        st.warning("⚠️ ไม่เจอข้อมูล")
     else:
         st.dataframe(df1, use_container_width=True)
 
-        # 🔢 จำนวนทั้งหมด (ยังซ้ำได้)
-        st.markdown(f"### 🔢 Total Rows: {len(df1)}")
-
-        # 🧠 unique VIN
-        st.markdown(f"### 🧠 Unique VIN: {df1['VIN'].nunique()}")
+        # 🔢 จำนวน VIN ไม่ซ้ำ (ล่าสุด)
+        st.markdown(f"### 🔢 Total VIN (Latest): {len(df1)}")
 
     # =========================
     # EXPORT
     # =========================
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df1.to_excel(writer, index=False, sheet_name='VIN_Filter_0008')
+        df1.to_excel(writer, index=False, sheet_name='VIN_Latest')
 
     output.seek(0)
 
     st.download_button(
         "Download Excel",
         data=output,
-        file_name="vin-message-filter-0008.xlsx"
+        file_name="vin-latest.xlsx"
     )
