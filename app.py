@@ -23,7 +23,7 @@ def parse_fdfdatahub(df):
 
     for col in df.columns:
         for val in df[col]:
-            if pd.isna(val): 
+            if pd.isna(val):
                 continue
 
             text = str(val)
@@ -43,11 +43,18 @@ def parse_fdfdatahub(df):
     df_out = pd.DataFrame(rows)
 
     if not df_out.empty:
-        # ❌ ตัด VIN ว่างออก
+        # ❌ ตัด VIN ว่าง
         df_out = df_out[df_out["VIN"].notna()]
 
-        # ✅ เอา VIN ไม่ซ้ำ (เก็บแค่ตัวแรก)
-        df_out = df_out.drop_duplicates(subset=["VIN"])
+        # 🔥 รวมข้อมูลทุก record ต่อ VIN
+        df_out = df_out.groupby("VIN", as_index=False).agg({
+            "Message": lambda x: " | ".join(
+                sorted(set(str(i) for i in x if pd.notna(i)))
+            ),
+            "Status": lambda x: " | ".join(
+                sorted(set(str(i) for i in x if pd.notna(i)))
+            )
+        })
 
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
@@ -79,7 +86,7 @@ if file1:
     else:
         st.dataframe(df1)
 
-        # 🔥 โชว์จำนวน VIN แบบไม่ซ้ำ
+        # 🔢 จำนวน VIN (ไม่ซ้ำ)
         st.markdown(f"### 🔢 Total Unique VIN: {len(df1)}")
 
     # =========================
