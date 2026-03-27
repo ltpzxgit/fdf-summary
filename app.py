@@ -46,15 +46,8 @@ def parse_fdfdatahub(df):
         # ❌ ตัด VIN ว่าง
         df_out = df_out[df_out["VIN"].notna()]
 
-        # 🔥 รวมข้อมูลทุก record ต่อ VIN
-        df_out = df_out.groupby("VIN", as_index=False).agg({
-            "Message": lambda x: " | ".join(
-                sorted(set(str(i) for i in x if pd.notna(i)))
-            ),
-            "Status": lambda x: " | ".join(
-                sorted(set(str(i) for i in x if pd.notna(i)))
-            )
-        })
+        # 🔥 สำคัญ: เอา log ล่าสุด (ตัวท้ายสุด)
+        df_out = df_out.drop_duplicates(subset=["VIN"], keep="last")
 
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
@@ -86,8 +79,8 @@ if file1:
     else:
         st.dataframe(df1)
 
-        # 🔢 จำนวน VIN (ไม่ซ้ำ)
-        st.markdown(f"### 🔢 Total Unique VIN: {len(df1)}")
+        # 🔢 จำนวน VIN (unique ล่าสุด)
+        st.markdown(f"### 🔢 Total VIN (Latest Only): {len(df1)}")
 
     # =========================
     # EXPORT
