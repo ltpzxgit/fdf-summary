@@ -25,25 +25,21 @@ def extract_request_id(text):
     return match.group(1) if match else None
 
 def extract_response_json(text):
-    """
-    ดึง JSON หลังคำว่า Response:
-    """
     if "Response:" not in text:
         return None
 
     try:
         json_part = text.split("Response:", 1)[1].strip()
-
-        # 🔥 แก้ double quote "" → "
-        json_part = json_part.replace('""', '"')
-
         return json.loads(json_part)
     except:
         return None
 
+
 def parse_vin_smart(df):
     rows = []
-    uuid_map = {}
+
+    # 🔥 STEP 1: รวม log ตาม UUID
+    uuid_groups = {}
 
     for col in df.columns:
         for val in df[col]:
@@ -51,40 +47,47 @@ def parse_vin_smart(df):
                 continue
 
             text = str(val)
-
             uuid = extract_uuid(text)
-            request_id = extract_request_id(text)
 
-            # =========================
-            # STEP 1: map RequestID
-            # =========================
-            if uuid and request_id:
-                uuid_map[uuid] = request_id
+            if not uuid:
+                continue
 
-            # =========================
-            # STEP 2: parse RESPONSE JSON
-            # =========================
-            data = extract_response_json(text)
+            if uuid not in uuid_groups:
+                uuid_groups[uuid] = []
 
-            if data and "data" in data:
-                vehicle_list = data["data"].get("vehicleList", [])
+            uuid_groups[uuid].append(text)
 
-                for item in vehicle_list:
-                    rows.append({
-                        "RequestID": uuid_map.get(uuid),
-                        "VIN": item.get("vin"),
-                        "Message": item.get("message"),
-                        "Status": str(item.get("status"))
-                    })
+    # 🔥 STEP 2: process ทีละ UUID (นี่แหละ key สำคัญ)
+    for uuid, logs in uuid_groups.items():
+
+        request_id = None
+        response_data = None
+
+        for log in logs:
+            if not request_id:
+                request_id = extract_request_id(log)
+
+            if not response_data:
+                response_data = extract_response_json(log)
+
+        # 🔥 STEP 3: แตก VIN
+        if response_data and "data" in response_data:
+            vehicle_list = response_data["data"].get("vehicleList", [])
+
+            for item in vehicle_list:
+                rows.append({
+                    "RequestID": request_id,
+                    "VIN": item.get("vin"),
+                    "Message": item.get("message"),
+                    "Status": str(item.get("status"))
+                })
 
     df_out = pd.DataFrame(rows)
 
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
 
-        # =========================
-        # RULE: 0008 ไม่ซ้ำ
-        # =========================
+        # 🔥 RULE 0008
         df_0008 = df_out[df_out["Status"] == "0008"]
         df_other = df_out[df_out["Status"] != "0008"]
 
@@ -103,11 +106,15 @@ def parse_vin_smart(df):
 # =========================
 # UPLOAD
 # =========================
-file1 = st.file_uploader("Upload FDFDataHub", type=["xlsx", "csv"])
+file1 = st.file_uploader("Upload FDFDataHub", type=["xlsx", "csv", "json"])
 
 if file1:
 
-    df_file1 = pd.read_csv(file1) if file1.name.endswith(".csv") else pd.read_excel(file1)
+    if file1.name.endswith(".json"):
+        df_file1 = pd.read_json(file1)
+        df_file1 = df_file1["@message"]  # 🔥 ใช้ column นี้
+    else:
+        df_file1 = pd.read_csv(file1) if file1.name.endswith(".csv") else pd.read_excel(file1)
 
     # =========================
     # PARSE
