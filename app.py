@@ -14,7 +14,7 @@ UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 
 # =========================
-# FDFDataHub (เหมือนเดิม)
+# FDFDataHub (เดิม)
 # =========================
 def extract_uuid(text):
     match = re.search(UUID_REGEX, text)
@@ -91,7 +91,7 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# FDFTCAP (FIX COMPLETE)
+# FDFTCAP (FIXED REAL)
 # =========================
 def parse_fdf_tcap(df):
     rows = []
@@ -129,19 +129,24 @@ def parse_fdf_tcap(df):
                 if u:
                     uuid = u.group(1)
 
-            # 🔥 หา JSON ตรง ๆ (ไม่สน prefix)
+            # 🔥 หา JSON response (robust)
             if "countInsert" in log and "statusCode" in log:
                 try:
-                    json_match = re.search(r'\{.*\}', log)
-                    if json_match:
-                        data = json.loads(json_match.group(0))
+                    json_part = log[log.find("{"):]
 
-                        status_code = data.get("statusCode")
-                        message = data.get("message")
-                        count_insert = data.get("countInsert", 0)
+                    # 🔥 FIX สำคัญ
+                    json_part = json_part.replace('""', '"')
 
-                except:
-                    pass
+                    json_part = json_part.replace('\r', '').replace('\n', '').strip()
+
+                    data = json.loads(json_part)
+
+                    status_code = data.get("statusCode")
+                    message = data.get("message")
+                    count_insert = data.get("countInsert", 0)
+
+                except Exception as e:
+                    st.write("❌ Parse fail:", json_part[:150])
 
         rows.append({
             "RequestID": req_id,
