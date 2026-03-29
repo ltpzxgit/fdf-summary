@@ -30,7 +30,7 @@ def extract_request_id(text):
 
 def parse_vin_smart(df):
     rows = []
-    uuid_map = {}   # 🔥 เก็บ UUID -> RequestID
+    uuid_map = {}  # 🔥 UUID → RequestID
 
     for col in df.columns:
         for val in df[col]:
@@ -42,20 +42,21 @@ def parse_vin_smart(df):
             uuid = extract_uuid(text)
             request_id = extract_request_id(text)
 
-            # 🔥 ถ้าเจอ RequestID → map เก็บไว้
+            # =========================
+            # STEP 1: เก็บ RequestID
+            # =========================
             if uuid and request_id:
                 uuid_map[uuid] = request_id
 
-            # 🔥 parse JSON
+            # =========================
+            # STEP 2: parse JSON block
+            # =========================
             for block in extract_json_blocks(text):
                 try:
                     data = json.loads(block)
 
-                    current_uuid = uuid
-                    mapped_request_id = uuid_map.get(current_uuid)
-
                     rows.append({
-                        "RequestID": mapped_request_id,
+                        "RequestID": uuid_map.get(uuid),  # 🔥 map ข้ามบรรทัด
                         "VIN": data.get("vin"),
                         "Message": data.get("message"),
                         "Status": str(data.get("status"))
@@ -69,14 +70,14 @@ def parse_vin_smart(df):
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
 
-        # 🔥 แยก 0008 กับ non-0008
+        # =========================
+        # RULE: 0008 ไม่ซ้ำ
+        # =========================
         df_0008 = df_out[df_out["Status"] == "0008"]
         df_other = df_out[df_out["Status"] != "0008"]
 
-        # 🔥 0008 → เอาแค่ 1 ต่อ VIN
         df_0008 = df_0008.drop_duplicates(subset=["VIN"], keep="last")
 
-        # 🔥 รวมกลับ
         df_final = pd.concat([df_other, df_0008], ignore_index=True)
 
         df_final = df_final.reset_index(drop=True)
