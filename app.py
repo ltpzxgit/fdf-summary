@@ -4,8 +4,8 @@ import re
 import json
 from io import BytesIO
 
-st.set_page_config(page_title="ITOSE - VIN Smart Filter", layout="wide")
-st.title("ITOSE Tools - VIN (0008 No Duplicate)")
+st.set_page_config(page_title="ITOSE - FDF", layout="wide")
+st.title("ITOSE Tools - FDF Summary")
 
 # =========================
 # REGEX
@@ -103,5 +103,5 @@ if file1:
     st.download_button(
         "Download Excel",
         data=output,
-        file_name="vin-smart.xlsx"
+        file_name="fdf-summary.xlsx"
     )
