@@ -4,7 +4,7 @@ import re
 from io import BytesIO
 
 st.set_page_config(page_title="ITOSE - FDF", layout="wide")
-st.title("ITOSE Tools - FDFTCAP Summary")
+st.title("ITOSE Tools - FDF Summary")
 
 # =========================
 # REGEX
@@ -13,7 +13,7 @@ UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 
 # =========================
-# FUNCTION
+# FDFTCAP (NO RESPONSE)
 # =========================
 def parse_fdf_tcap(df):
     rows = []
@@ -49,10 +49,9 @@ def parse_fdf_tcap(df):
                 if u:
                     uuid = u.group(1)
 
-            # 🔥 ดึง countInsert ตรง ๆ
-            m = re.search(r'countInsert["=:\s]+(\d+)', log)
-            if m:
-                count_insert = int(m.group(1))
+            # 🔥 นับจาก Request
+            if "vehicleList=[" in log:
+                count_insert = log.count("vin=")
 
         rows.append({
             "RequestID": req_id,
@@ -79,7 +78,7 @@ if file:
 
     df = parse_fdf_tcap(df_file)
 
-    st.subheader("FDFTCAP Summary (CountInsert)")
+    st.subheader("FDFTCAP Summary (Request Only)")
 
     if df.empty:
         st.warning("⚠️ ไม่เจอข้อมูล")
