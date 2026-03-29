@@ -14,7 +14,7 @@ UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 
 # =========================
-# FDFDataHub (ของเดิมมึง 100%)
+# FDFDataHub (เดิม)
 # =========================
 def extract_uuid(text):
     match = re.search(UUID_REGEX, text)
@@ -91,13 +91,13 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# FDFTCAP (ใช้ countInsert regex)
+# FDFTCAP (FIXED REAL)
 # =========================
 def parse_fdf_tcap(df):
     rows = []
     req_groups = {}
 
-    # group ตาม RequestID
+    # 🔥 group ตาม RequestID
     for col in df.columns:
         for val in df[col]:
             if pd.isna(val):
@@ -113,10 +113,12 @@ def parse_fdf_tcap(df):
 
             req_groups.setdefault(req_id, []).append(text)
 
-    # process ต่อ RequestID
+    # 🔥 process ต่อ RequestID
     for req_id, logs in req_groups.items():
 
         uuid = None
+        status_code = None
+        message = None
         count_insert = 0
 
         for log in logs:
@@ -127,15 +129,31 @@ def parse_fdf_tcap(df):
                 if u:
                     uuid = u.group(1)
 
-            # 🔥 ดึง countInsert ตรง ๆ
-            m = re.search(r'countInsert["=:\s]+(\d+)', log)
-            if m:
-                count_insert = int(m.group(1))
+            # 🔥 หา JSON response (robust)
+            if "countInsert" in log and "statusCode" in log:
+                try:
+                    json_part = log[log.find("{"):]
+
+                    # 🔥 FIX สำคัญ
+                    json_part = json_part.replace('""', '"')
+
+                    json_part = json_part.replace('\r', '').replace('\n', '').strip()
+
+                    data = json.loads(json_part)
+
+                    status_code = data.get("statusCode")
+                    message = data.get("message")
+                    count_insert = data.get("countInsert", 0)
+
+                except Exception as e:
+                    st.write("❌ Parse fail:", json_part[:150])
 
         rows.append({
             "RequestID": req_id,
             "UUID": uuid,
-            "CountInsert": count_insert
+            "CountInsert": count_insert,
+            "StatusCode": status_code,
+            "Message": message
         })
 
     df_out = pd.DataFrame(rows)
@@ -194,19 +212,24 @@ if file2:
 
     df2 = parse_fdf_tcap(df_file2)
 
-    st.subheader("FDFTCAP Summary (CountInsert)")
+    st.subheader("FDFTCAP Summary (By RequestID)")
 
     if df2.empty:
         st.warning("⚠️ ไม่เจอข้อมูล")
     else:
-        total_req = len(df2)
+        total_txn = len(df2)
         total_insert = df2["CountInsert"].sum()
+        success = df2[df2["StatusCode"] == "000"].shape[0]
+        fail = df2[df2["StatusCode"] != "000"].shape[0]
 
-        c1, c2 = st.columns(2)
-        c1.metric("Total Request", total_req)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total Request", total_txn)
         c2.metric("Total Insert", total_insert)
+        c3.metric("Success (000)", success)
+        c4.metric("Fail", fail)
 
         st.divider()
+
         st.dataframe(df2, use_container_width=True)
 
 # =========================
