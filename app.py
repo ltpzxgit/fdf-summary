@@ -11,7 +11,8 @@ st.title("ITOSE Tools - FDF Summary")
 # REGEX
 # =========================
 JSON_REGEX = r'\{.*?\}'
-UUID_REGEX = r'([a-f0-9\-]{36})'   # 🔥 UUID
+UUID_REGEX = r'([a-f0-9\-]{36})'
+REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 
 # =========================
 # FUNCTIONS
@@ -23,8 +24,13 @@ def extract_uuid(text):
     match = re.search(UUID_REGEX, text)
     return match.group(1) if match else None
 
+def extract_request_id(text):
+    match = re.search(REQUEST_ID_REGEX, text)
+    return match.group(1) if match else None
+
 def parse_vin_smart(df):
     rows = []
+    uuid_map = {}   # 🔥 เก็บ UUID -> RequestID
 
     for col in df.columns:
         for val in df[col]:
@@ -33,15 +39,23 @@ def parse_vin_smart(df):
 
             text = str(val)
 
-            # 🔥 หา UUID จากบรรทัดเดียวกัน
             uuid = extract_uuid(text)
+            request_id = extract_request_id(text)
 
+            # 🔥 ถ้าเจอ RequestID → map เก็บไว้
+            if uuid and request_id:
+                uuid_map[uuid] = request_id
+
+            # 🔥 parse JSON
             for block in extract_json_blocks(text):
                 try:
                     data = json.loads(block)
 
+                    current_uuid = uuid
+                    mapped_request_id = uuid_map.get(current_uuid)
+
                     rows.append({
-                        "RequestID": uuid,   # 🔥 เพิ่มตรงนี้
+                        "RequestID": mapped_request_id,
                         "VIN": data.get("vin"),
                         "Message": data.get("message"),
                         "Status": str(data.get("status"))
