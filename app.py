@@ -37,7 +37,7 @@ def extract_response_json(text):
 def parse_vin_smart(df):
     rows = []
 
-    # 🔥 STEP 1: group ตาม UUID
+    # 🔥 GROUP LOG ตาม UUID
     uuid_groups = {}
 
     for col in df.columns:
@@ -56,7 +56,7 @@ def parse_vin_smart(df):
 
             uuid_groups[uuid].append(text)
 
-    # 🔥 STEP 2: process ทีละ UUID
+    # 🔥 PROCESS ทีละ UUID
     for uuid, logs in uuid_groups.items():
 
         request_id = None
@@ -69,7 +69,6 @@ def parse_vin_smart(df):
             if not response_data:
                 response_data = extract_response_json(log)
 
-        # 🔥 STEP 3: แตก VIN
         if response_data and "data" in response_data:
             vehicle_list = response_data["data"].get("vehicleList", [])
 
@@ -87,26 +86,16 @@ def parse_vin_smart(df):
         df_out = df_out[df_out["VIN"].notna()]
 
         # =========================
-        # RULE: 0008 ไม่ซ้ำ (logic เดิม)
+        # 🔥 ONLY: Latest ต่อ VIN
         # =========================
-        df_0008 = df_out[df_out["Status"] == "0008"]
-        df_other = df_out[df_out["Status"] != "0008"]
+        df_out = df_out.iloc[::-1]
+        df_out = df_out.drop_duplicates(subset=["VIN"], keep="first")
+        df_out = df_out.iloc[::-1]
 
-        df_0008 = df_0008.drop_duplicates(subset=["VIN"], keep="last")
+        df_out = df_out.reset_index(drop=True)
+        df_out.insert(0, "No.", df_out.index + 1)
 
-        df_final = pd.concat([df_other, df_0008], ignore_index=True)
-
-        # =========================
-        # 🔥 OPTION 2: เอา latest ต่อ VIN
-        # =========================
-        df_final = df_final.iloc[::-1]  # reverse
-        df_final = df_final.drop_duplicates(subset=["VIN"], keep="first")
-        df_final = df_final.iloc[::-1]  # กลับลำดับ
-
-        df_final = df_final.reset_index(drop=True)
-        df_final.insert(0, "No.", df_final.index + 1)
-
-        return df_final
+        return df_out
 
     return df_out
 
