@@ -37,7 +37,7 @@ def extract_response_json(text):
 def parse_vin_smart(df):
     rows = []
 
-    # 🔥 GROUP ตาม UUID
+    # 🔥 GROUP LOG ตาม UUID
     uuid_groups = {}
 
     for col in df.columns:
@@ -86,12 +86,7 @@ def parse_vin_smart(df):
         df_out = df_out[df_out["VIN"].notna()]
 
         # =========================
-        # ❌ ตัด 0008 ทิ้ง
-        # =========================
-        df_out = df_out[df_out["Status"] != "0008"]
-
-        # =========================
-        # 🔥 Latest ต่อ VIN
+        # 🔥 ONLY: Latest ต่อ VIN
         # =========================
         df_out = df_out.iloc[::-1]
         df_out = df_out.drop_duplicates(subset=["VIN"], keep="first")
@@ -126,7 +121,7 @@ if file1:
     # =========================
     # DISPLAY
     # =========================
-    st.subheader("VIN (Latest per VIN | No 0008)")
+    st.subheader("VIN (Latest per VIN)")
 
     if df1.empty:
         st.warning("⚠️ ไม่เจอข้อมูล")
