@@ -10,16 +10,12 @@ st.title("ITOSE Tools - FDF Summary")
 # =========================
 # REGEX
 # =========================
-JSON_REGEX = r'\{.*?\}'
 UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 
 # =========================
 # FUNCTIONS
 # =========================
-def extract_json_blocks(text):
-    return re.findall(JSON_REGEX, text)
-
 def extract_uuid(text):
     match = re.search(UUID_REGEX, text)
     return match.group(1) if match else None
@@ -28,9 +24,26 @@ def extract_request_id(text):
     match = re.search(REQUEST_ID_REGEX, text)
     return match.group(1) if match else None
 
+def extract_response_json(text):
+    """
+    ดึง JSON หลังคำว่า Response:
+    """
+    if "Response:" not in text:
+        return None
+
+    try:
+        json_part = text.split("Response:", 1)[1].strip()
+
+        # 🔥 แก้ double quote "" → "
+        json_part = json_part.replace('""', '"')
+
+        return json.loads(json_part)
+    except:
+        return None
+
 def parse_vin_smart(df):
     rows = []
-    uuid_map = {}  # 🔥 UUID → RequestID
+    uuid_map = {}
 
     for col in df.columns:
         for val in df[col]:
@@ -43,27 +56,26 @@ def parse_vin_smart(df):
             request_id = extract_request_id(text)
 
             # =========================
-            # STEP 1: เก็บ RequestID
+            # STEP 1: map RequestID
             # =========================
             if uuid and request_id:
                 uuid_map[uuid] = request_id
 
             # =========================
-            # STEP 2: parse JSON block
+            # STEP 2: parse RESPONSE JSON
             # =========================
-            for block in extract_json_blocks(text):
-                try:
-                    data = json.loads(block)
+            data = extract_response_json(text)
 
+            if data and "data" in data:
+                vehicle_list = data["data"].get("vehicleList", [])
+
+                for item in vehicle_list:
                     rows.append({
-                        "RequestID": uuid_map.get(uuid),  # 🔥 map ข้ามบรรทัด
-                        "VIN": data.get("vin"),
-                        "Message": data.get("message"),
-                        "Status": str(data.get("status"))
+                        "RequestID": uuid_map.get(uuid),
+                        "VIN": item.get("vin"),
+                        "Message": item.get("message"),
+                        "Status": str(item.get("status"))
                     })
-
-                except:
-                    continue
 
     df_out = pd.DataFrame(rows)
 
