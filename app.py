@@ -14,7 +14,7 @@ UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 
 # =========================
-# FDFDataHub (VIN)
+# FDFDataHub (เหมือนเดิม)
 # =========================
 def extract_uuid(text):
     match = re.search(UUID_REGEX, text)
@@ -94,12 +94,13 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# FDFTCAP (UUID Summary - FIXED)
+# FDFTCAP (NEW - RequestID Driven)
 # =========================
 def parse_fdf_tcap(df):
     rows = []
-    uuid_groups = {}
+    req_groups = {}
 
+    # 🔥 group ตาม RequestID
     for col in df.columns:
         for val in df[col]:
             if pd.isna(val):
@@ -107,28 +108,29 @@ def parse_fdf_tcap(df):
 
             text = str(val)
 
-            uuid_match = re.search(UUID_REGEX, text)
-            uuid = uuid_match.group(1) if uuid_match else None
+            req_match = re.search(REQUEST_ID_REGEX, text)
+            req_id = req_match.group(1) if req_match else None
 
-            if not uuid:
+            if not req_id:
                 continue
 
-            uuid_groups.setdefault(uuid, []).append(text)
+            req_groups.setdefault(req_id, []).append(text)
 
-    for uuid, logs in uuid_groups.items():
+    # 🔥 process ต่อ RequestID
+    for req_id, logs in req_groups.items():
 
-        request_id = None
+        uuid = None
         status_code = None
         message = None
         count_insert = 0
 
         for log in logs:
 
-            # Request ID
-            if not request_id:
-                m = re.search(REQUEST_ID_REGEX, log)
-                if m:
-                    request_id = m.group(1)
+            # UUID
+            if not uuid:
+                u = re.search(UUID_REGEX, log)
+                if u:
+                    uuid = u.group(1)
 
             # 🔥 TCAP Response (ตัวจริง)
             if "Response from TCAP Cloud IF:" in log:
@@ -144,8 +146,8 @@ def parse_fdf_tcap(df):
                     pass
 
         rows.append({
+            "RequestID": req_id,
             "UUID": uuid,
-            "RequestID": request_id,
             "CountInsert": count_insert,
             "StatusCode": status_code,
             "Message": message
@@ -207,19 +209,18 @@ if file2:
 
     df2 = parse_fdf_tcap(df_file2)
 
-    st.subheader("FDFTCAP Summary")
+    st.subheader("FDFTCAP Summary (By RequestID)")
 
     if df2.empty:
         st.warning("⚠️ ไม่เจอข้อมูล")
     else:
-        # 🔥 SUMMARY
         total_txn = len(df2)
         total_insert = df2["CountInsert"].sum()
         success = df2[df2["StatusCode"] == "000"].shape[0]
         fail = df2[df2["StatusCode"] != "000"].shape[0]
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Transaction", total_txn)
+        c1.metric("Total Request", total_txn)
         c2.metric("Total Insert", total_insert)
         c3.metric("Success (000)", success)
         c4.metric("Fail", fail)
