@@ -27,7 +27,6 @@ def extract_request_id(text):
 def extract_response_json(text):
     if "Response:" not in text:
         return None
-
     try:
         json_part = text.split("Response:", 1)[1].strip()
         return json.loads(json_part)
@@ -38,7 +37,7 @@ def extract_response_json(text):
 def parse_vin_smart(df):
     rows = []
 
-    # 🔥 STEP 1: รวม log ตาม UUID
+    # 🔥 STEP 1: group ตาม UUID
     uuid_groups = {}
 
     for col in df.columns:
@@ -57,7 +56,7 @@ def parse_vin_smart(df):
 
             uuid_groups[uuid].append(text)
 
-    # 🔥 STEP 2: process ทีละ UUID (นี่แหละ key สำคัญ)
+    # 🔥 STEP 2: process ทีละ UUID
     for uuid, logs in uuid_groups.items():
 
         request_id = None
@@ -87,13 +86,22 @@ def parse_vin_smart(df):
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
 
-        # 🔥 RULE 0008
+        # =========================
+        # RULE: 0008 ไม่ซ้ำ (logic เดิม)
+        # =========================
         df_0008 = df_out[df_out["Status"] == "0008"]
         df_other = df_out[df_out["Status"] != "0008"]
 
         df_0008 = df_0008.drop_duplicates(subset=["VIN"], keep="last")
 
         df_final = pd.concat([df_other, df_0008], ignore_index=True)
+
+        # =========================
+        # 🔥 OPTION 2: เอา latest ต่อ VIN
+        # =========================
+        df_final = df_final.iloc[::-1]  # reverse
+        df_final = df_final.drop_duplicates(subset=["VIN"], keep="first")
+        df_final = df_final.iloc[::-1]  # กลับลำดับ
 
         df_final = df_final.reset_index(drop=True)
         df_final.insert(0, "No.", df_final.index + 1)
@@ -112,7 +120,7 @@ if file1:
 
     if file1.name.endswith(".json"):
         df_file1 = pd.read_json(file1)
-        df_file1 = df_file1["@message"]  # 🔥 ใช้ column นี้
+        df_file1 = df_file1["@message"]
     else:
         df_file1 = pd.read_csv(file1) if file1.name.endswith(".csv") else pd.read_excel(file1)
 
@@ -124,7 +132,7 @@ if file1:
     # =========================
     # DISPLAY
     # =========================
-    st.subheader("VIN (0008 No Duplicate)")
+    st.subheader("VIN (Latest per VIN)")
 
     if df1.empty:
         st.warning("⚠️ ไม่เจอข้อมูล")
