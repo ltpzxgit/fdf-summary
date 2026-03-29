@@ -12,9 +12,10 @@ st.title("ITOSE Tools - FDF Summary")
 # =========================
 UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
+JSON_REGEX = r'\{.*?\}'
 
 # =========================
-# FDFDataHub (เดิม)
+# COMMON
 # =========================
 def extract_uuid(text):
     match = re.search(UUID_REGEX, text)
@@ -24,11 +25,16 @@ def extract_request_id(text):
     match = re.search(REQUEST_ID_REGEX, text)
     return match.group(1) if match else None
 
+
+# =========================
+# FDFDataHub
+# =========================
 def extract_response_json(text):
     if "Response:" not in text:
         return None
     try:
         json_part = text.split("Response:", 1)[1].strip()
+        json_part = json_part.replace('""', '"')
         return json.loads(json_part)
     except:
         return None
@@ -38,18 +44,17 @@ def parse_fdf_datahub(df):
     rows = []
     uuid_groups = {}
 
-    for col in df.columns:
-        for val in df[col]:
-            if pd.isna(val):
-                continue
+    for val in df:
+        if pd.isna(val):
+            continue
 
-            text = str(val)
-            uuid = extract_uuid(text)
+        text = str(val)
+        uuid = extract_uuid(text)
 
-            if not uuid:
-                continue
+        if not uuid:
+            continue
 
-            uuid_groups.setdefault(uuid, []).append(text)
+        uuid_groups.setdefault(uuid, []).append(text)
 
     for uuid, logs in uuid_groups.items():
 
@@ -91,29 +96,27 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# FDFTCAP (FIXED REAL)
+# FDFTCAP (🔥 FIXED จริง)
 # =========================
 def parse_fdf_tcap(df):
     rows = []
     req_groups = {}
 
-    # 🔥 group ตาม RequestID
-    for col in df.columns:
-        for val in df[col]:
-            if pd.isna(val):
-                continue
+    # 👉 group ตาม RequestID
+    for val in df:
+        if pd.isna(val):
+            continue
 
-            text = str(val)
+        text = str(val)
 
-            req_match = re.search(REQUEST_ID_REGEX, text)
-            req_id = req_match.group(1) if req_match else None
+        req_id = extract_request_id(text)
 
-            if not req_id:
-                continue
+        if not req_id:
+            continue
 
-            req_groups.setdefault(req_id, []).append(text)
+        req_groups.setdefault(req_id, []).append(text)
 
-    # 🔥 process ต่อ RequestID
+    # 👉 process ต่อ RequestID
     for req_id, logs in req_groups.items():
 
         uuid = None
@@ -129,24 +132,25 @@ def parse_fdf_tcap(df):
                 if u:
                     uuid = u.group(1)
 
-            # 🔥 หา JSON response (robust)
-            if "countInsert" in log and "statusCode" in log:
+            # 🔥 หา JSON ทุกก้อนใน log
+            json_matches = re.findall(JSON_REGEX, log)
+
+            for jm in json_matches:
                 try:
-                    json_part = log[log.find("{"):]
+                    clean = jm.replace('""', '"') \
+                              .replace('\n', '') \
+                              .replace('\r', '') \
+                              .strip()
 
-                    # 🔥 FIX สำคัญ
-                    json_part = json_part.replace('""', '"')
+                    data = json.loads(clean)
 
-                    json_part = json_part.replace('\r', '').replace('\n', '').strip()
+                    if "statusCode" in data:
+                        status_code = data.get("statusCode")
+                        message = data.get("message")
+                        count_insert = data.get("countInsert", 0)
 
-                    data = json.loads(json_part)
-
-                    status_code = data.get("statusCode")
-                    message = data.get("message")
-                    count_insert = data.get("countInsert", 0)
-
-                except Exception as e:
-                    st.write("❌ Parse fail:", json_part[:150])
+                except:
+                    continue
 
         rows.append({
             "RequestID": req_id,
@@ -189,6 +193,10 @@ if file1:
     else:
         df_file1 = pd.read_csv(file1) if file1.name.endswith(".csv") else pd.read_excel(file1)
 
+    # 🔥 FIX: ใช้ column เดียว
+    if isinstance(df_file1, pd.DataFrame) and "@message" in df_file1.columns:
+        df_file1 = df_file1["@message"]
+
     df1 = parse_fdf_datahub(df_file1)
 
     st.subheader("FDFDataHub (Latest per VIN | No 0008)")
@@ -200,6 +208,7 @@ if file1:
         st.markdown(f"### 🔢 Total Rows: {len(df1)}")
         st.markdown(f"### 🧠 Unique VIN: {df1['VIN'].nunique()}")
 
+
 # =========================
 # TCAP
 # =========================
@@ -209,6 +218,10 @@ if file2:
         df_file2 = df_file2["@message"]
     else:
         df_file2 = pd.read_csv(file2) if file2.name.endswith(".csv") else pd.read_excel(file2)
+
+    # 🔥 FIX: ใช้ column เดียว
+    if isinstance(df_file2, pd.DataFrame) and "@message" in df_file2.columns:
+        df_file2 = df_file2["@message"]
 
     df2 = parse_fdf_tcap(df_file2)
 
@@ -231,6 +244,7 @@ if file2:
         st.divider()
 
         st.dataframe(df2, use_container_width=True)
+
 
 # =========================
 # EXPORT
