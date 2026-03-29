@@ -94,7 +94,7 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# FDFTCAP (UUID Summary)
+# FDFTCAP (UUID Summary - FIXED)
 # =========================
 def parse_fdf_tcap(df):
     rows = []
@@ -130,18 +130,15 @@ def parse_fdf_tcap(df):
                 if m:
                     request_id = m.group(1)
 
-            # CountInsert
-            if "vehicleList=[" in log:
-                count_insert = log.count("vin=")
-
-            # Response
-            if "Response:" in log and not status_code:
+            # 🔥 TCAP Response (ตัวจริง)
+            if "Response from TCAP Cloud IF:" in log:
                 try:
-                    json_part = log.split("Response:", 1)[1].strip()
+                    json_part = log.split("Response from TCAP Cloud IF:", 1)[1].strip()
                     data = json.loads(json_part)
 
                     status_code = data.get("statusCode")
                     message = data.get("message")
+                    count_insert = data.get("countInsert", 0)
 
                 except:
                     pass
@@ -218,13 +215,13 @@ if file2:
         # 🔥 SUMMARY
         total_txn = len(df2)
         total_insert = df2["CountInsert"].sum()
-        success = df2[df2["StatusCode"] == 200].shape[0]
-        fail = df2[df2["StatusCode"] != 200].shape[0]
+        success = df2[df2["StatusCode"] == "000"].shape[0]
+        fail = df2[df2["StatusCode"] != "000"].shape[0]
 
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Total Transaction", total_txn)
         c2.metric("Total Insert", total_insert)
-        c3.metric("Success", success)
+        c3.metric("Success (000)", success)
         c4.metric("Fail", fail)
 
         st.divider()
