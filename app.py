@@ -78,11 +78,8 @@ def parse_fdf_datahub(df):
 
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
-
-        # ❌ ตัด 0008
         df_out = df_out[df_out["Status"] != "0008"]
 
-        # 🔥 Latest ต่อ VIN
         df_out = df_out.iloc[::-1]
         df_out = df_out.drop_duplicates(subset=["VIN"], keep="first")
         df_out = df_out.iloc[::-1]
@@ -94,7 +91,7 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# FDFTCAP (NEW - RequestID Driven)
+# FDFTCAP (FIX COMPLETE)
 # =========================
 def parse_fdf_tcap(df):
     rows = []
@@ -132,15 +129,16 @@ def parse_fdf_tcap(df):
                 if u:
                     uuid = u.group(1)
 
-            # 🔥 TCAP Response (ตัวจริง)
-            if "Response from TCAP Cloud IF:" in log:
+            # 🔥 หา JSON ตรง ๆ (ไม่สน prefix)
+            if "countInsert" in log and "statusCode" in log:
                 try:
-                    json_part = log.split("Response from TCAP Cloud IF:", 1)[1].strip()
-                    data = json.loads(json_part)
+                    json_match = re.search(r'\{.*\}', log)
+                    if json_match:
+                        data = json.loads(json_match.group(0))
 
-                    status_code = data.get("statusCode")
-                    message = data.get("message")
-                    count_insert = data.get("countInsert", 0)
+                        status_code = data.get("statusCode")
+                        message = data.get("message")
+                        count_insert = data.get("countInsert", 0)
 
                 except:
                     pass
@@ -177,7 +175,7 @@ df1 = pd.DataFrame()
 df2 = pd.DataFrame()
 
 # =========================
-# PROCESS DataHub
+# DATAHUB
 # =========================
 if file1:
     if file1.name.endswith(".json"):
@@ -198,7 +196,7 @@ if file1:
         st.markdown(f"### 🧠 Unique VIN: {df1['VIN'].nunique()}")
 
 # =========================
-# PROCESS TCAP
+# TCAP
 # =========================
 if file2:
     if file2.name.endswith(".json"):
