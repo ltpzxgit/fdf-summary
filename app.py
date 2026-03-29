@@ -11,12 +11,17 @@ st.title("ITOSE Tools - FDF Summary")
 # REGEX
 # =========================
 JSON_REGEX = r'\{.*?\}'
+UUID_REGEX = r'([a-f0-9\-]{36})'   # 🔥 UUID
 
 # =========================
 # FUNCTIONS
 # =========================
 def extract_json_blocks(text):
     return re.findall(JSON_REGEX, text)
+
+def extract_uuid(text):
+    match = re.search(UUID_REGEX, text)
+    return match.group(1) if match else None
 
 def parse_vin_smart(df):
     rows = []
@@ -28,11 +33,15 @@ def parse_vin_smart(df):
 
             text = str(val)
 
+            # 🔥 หา UUID จากบรรทัดเดียวกัน
+            uuid = extract_uuid(text)
+
             for block in extract_json_blocks(text):
                 try:
                     data = json.loads(block)
 
                     rows.append({
+                        "RequestID": uuid,   # 🔥 เพิ่มตรงนี้
                         "VIN": data.get("vin"),
                         "Message": data.get("message"),
                         "Status": str(data.get("status"))
@@ -50,7 +59,7 @@ def parse_vin_smart(df):
         df_0008 = df_out[df_out["Status"] == "0008"]
         df_other = df_out[df_out["Status"] != "0008"]
 
-        # 🔥 0008 → เอาแค่ 1 ต่อ VIN (ตัวล่าสุด)
+        # 🔥 0008 → เอาแค่ 1 ต่อ VIN
         df_0008 = df_0008.drop_duplicates(subset=["VIN"], keep="last")
 
         # 🔥 รวมกลับ
