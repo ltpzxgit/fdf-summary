@@ -14,7 +14,7 @@ UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
 
 # =========================
-# FUNCTIONS FDFDataHub
+# FDFDataHub FUNCTIONS
 # =========================
 def extract_uuid(text):
     match = re.search(UUID_REGEX, text)
@@ -38,6 +38,7 @@ def parse_fdf_datahub(df):
     rows = []
     uuid_groups = {}
 
+    # 🔥 group ตาม UUID
     for col in df.columns:
         for val in df[col]:
             if pd.isna(val):
@@ -51,7 +52,9 @@ def parse_fdf_datahub(df):
 
             uuid_groups.setdefault(uuid, []).append(text)
 
+    # 🔥 process ทีละ UUID
     for uuid, logs in uuid_groups.items():
+
         request_id = None
         response_data = None
 
@@ -93,28 +96,39 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# FUNCTIONS FDFTCAP
+# FDFTCAP FUNCTIONS (FIXED)
 # =========================
 def parse_fdf_tcap(df):
-    df.columns = [c.strip() for c in df.columns]
+    rows = []
 
-    # 🔥 หา column ที่เกี่ยวกับ status
-    status_col = None
     for col in df.columns:
-        if "status" in col.lower():
-            status_col = col
-            break
+        for val in df[col]:
+            if pd.isna(val):
+                continue
 
-    if not status_col:
-        return pd.DataFrame()
+            text = str(val)
 
-    # 🔥 filter 000
-    df = df[df[status_col].astype(str).str.contains("000")]
+            # 🔥 หา statusCode ทั้ง 2 format
+            match = re.search(r'"statusCode"\s*:\s*(\d+)', text)
+            if not match:
+                match = re.search(r'statusCode=(\d+)', text)
 
-    df = df.reset_index(drop=True)
-    df.insert(0, "No.", df.index + 1)
+            status_code = match.group(1) if match else None
 
-    return df
+            # 🔥 เอาเฉพาะ success
+            if status_code == "200":
+                rows.append({
+                    "Raw": text,
+                    "StatusCode": status_code
+                })
+
+    df_out = pd.DataFrame(rows)
+
+    if not df_out.empty:
+        df_out = df_out.reset_index(drop=True)
+        df_out.insert(0, "No.", df_out.index + 1)
+
+    return df_out
 
 
 # =========================
@@ -132,6 +146,9 @@ with col2:
 # =========================
 # PROCESS FDFDataHub
 # =========================
+df1 = pd.DataFrame()
+df2 = pd.DataFrame()
+
 if file1:
     if file1.name.endswith(".json"):
         df_file1 = pd.read_json(file1)
@@ -148,6 +165,7 @@ if file1:
     else:
         st.dataframe(df1, use_container_width=True)
         st.markdown(f"### 🔢 Total Rows: {len(df1)}")
+        st.markdown(f"### 🧠 Unique VIN: {df1['VIN'].nunique()}")
 
 
 # =========================
@@ -158,26 +176,25 @@ if file2:
 
     df2 = parse_fdf_tcap(df_file2)
 
-    st.subheader("FDFTCAP (StatusCode = 000)")
+    st.subheader("FDFTCAP (StatusCode = 200)")
 
     if df2.empty:
-        st.warning("⚠️ ไม่เจอ StatusCode = 000")
+        st.warning("⚠️ ไม่เจอข้อมูล (statusCode=200)")
     else:
         st.dataframe(df2, use_container_width=True)
         st.markdown(f"### 🔢 Total Rows: {len(df2)}")
 
 
 # =========================
-# EXPORT (optional รวม)
+# EXPORT
 # =========================
-if file1 or file2:
+if not df1.empty or not df2.empty:
     output = BytesIO()
 
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        if file1 and not df1.empty:
+        if not df1.empty:
             df1.to_excel(writer, index=False, sheet_name='FDFDataHub')
-
-        if file2 and not df2.empty:
+        if not df2.empty:
             df2.to_excel(writer, index=False, sheet_name='FDFTCAP')
 
     output.seek(0)
