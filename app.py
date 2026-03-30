@@ -8,34 +8,48 @@ st.set_page_config(page_title="ITOSE - FDF", layout="wide")
 st.title("ITOSE Tools - FDF Summary")
 
 # =========================
-# 🎨 STYLE (เหมือน repo)
+# 🎨 STYLE (ปรับให้เหมือน ref)
 # =========================
 st.markdown("""
 <style>
 
-/* Upload title */
+/* ===== Upload Title ===== */
 .upload-title-box {
-    background: #1e293b;
-    padding: 20px;
-    border-radius: 16px;
+    background: #263246;
+    padding: 18px;
+    border-radius: 14px;
     text-align: center;
     color: #cbd5f5;
-    font-size: 16px;
-    margin-bottom: 10px;
+    font-size: 15px;
+    margin-bottom: 12px;
 }
 
-/* File uploader */
+/* ===== Upload Container ===== */
 [data-testid="stFileUploader"] {
-    background: #1f2937;
-    padding: 25px;
-    border-radius: 16px;
-    border: none;
-}
-[data-testid="stFileUploader"] section {
+    background: linear-gradient(135deg, #2b2f3a, #1f2937);
+    padding: 20px;
+    border-radius: 18px;
     border: none;
 }
 
-/* Summary */
+/* Remove default border */
+[data-testid="stFileUploader"] section {
+    border: none !important;
+}
+
+/* Button */
+[data-testid="stFileUploader"] button {
+    background: #111827;
+    border: 1px solid #374151;
+    border-radius: 10px;
+    padding: 8px 16px;
+    color: white;
+}
+[data-testid="stFileUploader"] button:hover {
+    background: #1f2937;
+}
+
+/* ===== Summary ===== */
 .summary-card {
     background: linear-gradient(135deg, #1e293b, #0f172a);
     border-radius: 24px;
