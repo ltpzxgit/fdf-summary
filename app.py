@@ -8,33 +8,44 @@ st.set_page_config(page_title="ITOSE - FDF", layout="wide")
 st.title("ITOSE Tools - FDF Summary")
 
 # =========================
-# 🎨 STYLE (ปรับให้เหมือน ref)
+# 🎨 CSS FINAL (เหมือน ref)
 # =========================
 st.markdown("""
 <style>
 
 /* ===== Upload Title ===== */
-.upload-title-box {
-    background: #263246;
-    padding: 18px;
-    border-radius: 14px;
-    text-align: center;
-    color: #cbd5f5;
-    font-size: 15px;
-    margin-bottom: 12px;
+.upload-title {
+    font-size: 14px;
+    color: #9ca3af;
+    margin-bottom: 8px;
 }
 
-/* ===== Upload Container ===== */
+/* ===== Upload Box ===== */
 [data-testid="stFileUploader"] {
-    background: linear-gradient(135deg, #2b2f3a, #1f2937);
+    background: linear-gradient(145deg, #2b2f3a, #1f2937);
+    border-radius: 14px;
     padding: 20px;
-    border-radius: 18px;
-    border: none;
+    border: 1px solid #374151;
 }
 
-/* Remove default border */
+/* Layout */
 [data-testid="stFileUploader"] section {
     border: none !important;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Text */
+[data-testid="stFileUploader"] section div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+[data-testid="stFileUploader"] section div span {
+    font-size: 15px;
+    color: #e5e7eb;
 }
 
 /* Button */
@@ -45,31 +56,43 @@ st.markdown("""
     padding: 8px 16px;
     color: white;
 }
+
 [data-testid="stFileUploader"] button:hover {
     background: #1f2937;
+    border-color: #4b5563;
 }
 
-/* ===== Summary ===== */
-.summary-card {
-    background: linear-gradient(135deg, #1e293b, #0f172a);
-    border-radius: 24px;
-    padding: 40px;
+/* ===== Summary Card ===== */
+.card {
+    padding: 20px;
+    border-radius: 14px;
+    background: linear-gradient(145deg, #0f172a, #111827);
+    border: 1px solid #374151;
     text-align: center;
+    transition: all 0.2s ease-in-out;
+}
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+.card-title {
+    font-size: 14px;
+    color: #9ca3af;
+}
+.card-value {
+    font-size: 42px;
+    font-weight: bold;
     color: white;
 }
-.summary-title {
-    color: #94a3b8;
-}
-.summary-value {
-    font-size: 56px;
-    font-weight: bold;
-}
-.summary-error {
-    border: 1px solid #22c55e;
-    border-radius: 14px;
+.card-error {
+    margin-top: 12px;
     padding: 12px;
-    margin-top: 15px;
-    color: #22c55e;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.block-container {
+    padding-top: 2rem;
 }
 
 </style>
@@ -154,7 +177,7 @@ def extract_json_from_log(log):
         part = log.split("Response", 1)[1]
         start = part.find("{")
         end = part.rfind("}") + 1
-        clean = part[start:end].replace('""', '"').replace('\n','').replace('\r','')
+        clean = part[start:end].replace('""', '"').replace('\\n','').replace('\\r','')
         return json.loads(clean)
     except:
         return None
@@ -193,7 +216,7 @@ def parse_fdf_tcap(df):
     return df_out
 
 # =========================
-# VehicleSettingRequester (FULL)
+# VehicleSettingRequester
 # =========================
 def extract_body_data(text):
     if "body={" not in text:
@@ -216,7 +239,7 @@ def extract_response_data(text):
         part = text.split("Response:", 1)[1]
         start = part.find("{")
         end = part.rfind("}") + 1
-        clean = part[start:end].replace('""', '"').replace('\n','').replace('\r','')
+        clean = part[start:end].replace('""', '"').replace('\\n','').replace('\\r','')
         data = json.loads(clean)
         return {
             "StatusCode": data.get("statusCode"),
@@ -263,22 +286,22 @@ def parse_vehicle_setting(df):
     return pd.DataFrame(rows)
 
 # =========================
-# 📂 UPLOAD (3 ช่อง)
+# UPLOAD
 # =========================
 st.markdown("## Upload Files")
 
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    st.markdown('<div class="upload-title-box">FDFDataHub</div>', unsafe_allow_html=True)
+    st.markdown('<div class="upload-title">FDFDataHub</div>', unsafe_allow_html=True)
     file1 = st.file_uploader("", key="f1")
 
 with c2:
-    st.markdown('<div class="upload-title-box">FDFTCAP</div>', unsafe_allow_html=True)
+    st.markdown('<div class="upload-title">FDFTCAP</div>', unsafe_allow_html=True)
     file2 = st.file_uploader("", key="f2")
 
 with c3:
-    st.markdown('<div class="upload-title-box">VehicleSettingRequester</div>', unsafe_allow_html=True)
+    st.markdown('<div class="upload-title">VehicleSettingRequester</div>', unsafe_allow_html=True)
     file3 = st.file_uploader("", key="f3")
 
 # =========================
@@ -302,29 +325,31 @@ if file3:
     df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
 
 # =========================
-# SUMMARY (3 กล่อง)
+# SUMMARY
 # =========================
 st.markdown("## Summary")
 
 s1, s2, s3 = st.columns(3)
 
 def card(title, value):
-    st.markdown(f"""
-    <div class="summary-card">
-        <div class="summary-title">{title}</div>
-        <div class="summary-value">{value}</div>
-        <div class="summary-error">Error: 0</div>
+    return f"""
+    <div class="card">
+        <div class="card-title">{title}</div>
+        <div class="card-value">{value}</div>
+        <div class="card-error" style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#4ade80;">
+            Error: 0
+        </div>
     </div>
-    """, unsafe_allow_html=True)
+    """
 
 with s1:
-    card("TCAPLinkageDatahub", len(df1))
+    st.markdown(card("TCAPLinkageDatahub", len(df1)), unsafe_allow_html=True)
 
 with s2:
-    card("TCAPLinkage", df2["CountInsert"].sum() if not df2.empty else 0)
+    st.markdown(card("TCAPLinkage", df2["CountInsert"].sum() if not df2.empty else 0), unsafe_allow_html=True)
 
 with s3:
-    card("VehicleSettingRequester", len(df3))
+    st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
 
 # =========================
 # TABLE
