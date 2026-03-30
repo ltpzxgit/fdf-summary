@@ -8,13 +8,13 @@ st.set_page_config(page_title="ITOSE - FDF", layout="wide")
 st.title("ITOSE Tools - FDF Summary")
 
 # =========================
-# 🎨 STYLE (แบบที่ตังค์อยากได้)
+# 🎨 CSS FINAL (เหมือน ref)
 # =========================
 st.markdown("""
 <style>
 
-/* ===== Upload Label ===== */
-.upload-label {
+/* ===== Upload Title ===== */
+.upload-title {
     font-size: 14px;
     color: #9ca3af;
     margin-bottom: 8px;
@@ -24,26 +24,42 @@ st.markdown("""
 [data-testid="stFileUploader"] {
     background: linear-gradient(145deg, #2b2f3a, #1f2937);
     border-radius: 14px;
-    padding: 18px;
+    padding: 20px;
     border: 1px solid #374151;
 }
 
-/* เอา border default ข้างในออก */
+/* Layout */
 [data-testid="stFileUploader"] section {
     border: none !important;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-/* ปุ่ม */
+/* Text */
+[data-testid="stFileUploader"] section div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+[data-testid="stFileUploader"] section div span {
+    font-size: 15px;
+    color: #e5e7eb;
+}
+
+/* Button */
 [data-testid="stFileUploader"] button {
-    border-radius: 10px;
     background: #111827;
     border: 1px solid #374151;
+    border-radius: 10px;
+    padding: 8px 16px;
     color: white;
 }
 
-/* hover */
 [data-testid="stFileUploader"] button:hover {
     background: #1f2937;
+    border-color: #4b5563;
 }
 
 /* ===== Summary Card ===== */
@@ -53,6 +69,11 @@ st.markdown("""
     background: linear-gradient(145deg, #0f172a, #111827);
     border: 1px solid #374151;
     text-align: center;
+    transition: all 0.2s ease-in-out;
+}
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
 }
 .card-title {
     font-size: 14px;
@@ -67,9 +88,11 @@ st.markdown("""
     margin-top: 12px;
     padding: 12px;
     border-radius: 10px;
-    color: #4ade80;
-    background: rgba(34,197,94,0.1);
-    border: 1px solid rgba(34,197,94,0.3);
+    font-weight: 500;
+}
+
+.block-container {
+    padding-top: 2rem;
 }
 
 </style>
@@ -138,7 +161,7 @@ def parse_fdf_datahub(df):
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
         df_out = df_out[df_out["Status"] != "0008"]
-        df_out = df_out.drop_duplicates(subset=["VIN"])
+        df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
 
@@ -154,7 +177,7 @@ def extract_json_from_log(log):
         part = log.split("Response", 1)[1]
         start = part.find("{")
         end = part.rfind("}") + 1
-        clean = part[start:end].replace('""', '"')
+        clean = part[start:end].replace('""', '"').replace('\\n','').replace('\\r','')
         return json.loads(clean)
     except:
         return None
@@ -163,20 +186,68 @@ def parse_fdf_tcap(df):
     rows = []
     logs = [str(x) for x in df if not pd.isna(x)]
 
+    uuid_to_req = {}
+    for text in logs:
+        uuid = extract_uuid(text)
+        req = extract_request_id(text)
+        if uuid and req:
+            uuid_to_req[uuid] = req
+
     for text in logs:
         data = extract_json_from_log(text)
         if not data:
             continue
 
+        uuid = extract_uuid(text)
+
         rows.append({
-            "CountInsert": data.get("countInsert", 0)
+            "UUID": uuid,
+            "RequestID": uuid_to_req.get(uuid),
+            "CountInsert": data.get("countInsert", 0),
+            "StatusCode": data.get("statusCode"),
+            "Message": data.get("message")
         })
 
-    return pd.DataFrame(rows)
+    df_out = pd.DataFrame(rows)
+
+    if not df_out.empty:
+        df_out.insert(0, "No.", range(1, len(df_out)+1))
+
+    return df_out
 
 # =========================
 # VehicleSettingRequester
 # =========================
+def extract_body_data(text):
+    if "body={" not in text:
+        return {}
+    try:
+        part = text.split("body={", 1)[1].split("}", 1)[0]
+        data = {}
+        for item in part.split(","):
+            if "=" in item:
+                k, v = item.split("=", 1)
+                data[k.strip()] = v.strip()
+        return data
+    except:
+        return {}
+
+def extract_response_data(text):
+    if "Response:" not in text:
+        return {}
+    try:
+        part = text.split("Response:", 1)[1]
+        start = part.find("{")
+        end = part.rfind("}") + 1
+        clean = part[start:end].replace('""', '"').replace('\\n','').replace('\\r','')
+        data = json.loads(clean)
+        return {
+            "StatusCode": data.get("statusCode"),
+            "ResponseMessage": data.get("message")
+        }
+    except:
+        return {}
+
 def parse_vehicle_setting(df):
     logs = [str(x) for x in df if not pd.isna(x)]
     uuid_map = {}
@@ -188,36 +259,49 @@ def parse_vehicle_setting(df):
 
         uuid_map.setdefault(uuid, {})
 
-        if "vin=" in text:
-            uuid_map[uuid]["VIN"] = text.split("vin=")[1].split(",")[0]
+        if "Request:" in text:
+            uuid_map[uuid].update(extract_body_data(text))
+
+        if "Response:" in text:
+            uuid_map[uuid].update(extract_response_data(text))
 
     rows = []
-    for i, (uuid, data) in enumerate(uuid_map.items(), 1):
+    for i, (uuid, data) in enumerate(uuid_map.items(), start=1):
         rows.append({
             "No.": i,
             "UUID": uuid,
-            "VIN": data.get("VIN"),
+            "VIN": data.get("vin"),
+            "DeviceID": data.get("deviceId"),
+            "IMEI": data.get("IMEI"),
+            "SimStatus": data.get("simStatus"),
+            "SimPackage": data.get("simPackage"),
+            "CAL_Flag": data.get("CAL_Flag"),
+            "B2CFlag": data.get("B2CFlag"),
+            "B2BFlag": data.get("B2BFlag"),
+            "Tconnectflag": data.get("Tconnectflag"),
+            "StatusCode": data.get("StatusCode"),
+            "ResponseMessage": data.get("ResponseMessage"),
         })
 
     return pd.DataFrame(rows)
 
 # =========================
-# UPLOAD (3 ช่อง)
+# UPLOAD
 # =========================
 st.markdown("## Upload Files")
 
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    st.markdown('<div class="upload-label">FDFDataHub</div>', unsafe_allow_html=True)
+    st.markdown('<div class="upload-title">FDFDataHub</div>', unsafe_allow_html=True)
     file1 = st.file_uploader("", key="f1")
 
 with c2:
-    st.markdown('<div class="upload-label">FDFTCAP</div>', unsafe_allow_html=True)
+    st.markdown('<div class="upload-title">FDFTCAP</div>', unsafe_allow_html=True)
     file2 = st.file_uploader("", key="f2")
 
 with c3:
-    st.markdown('<div class="upload-label">VehicleSettingRequester</div>', unsafe_allow_html=True)
+    st.markdown('<div class="upload-title">VehicleSettingRequester</div>', unsafe_allow_html=True)
     file3 = st.file_uploader("", key="f3")
 
 # =========================
@@ -252,7 +336,9 @@ def card(title, value):
     <div class="card">
         <div class="card-title">{title}</div>
         <div class="card-value">{value}</div>
-        <div class="card-error">Error: 0</div>
+        <div class="card-error" style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#4ade80;">
+            Error: 0
+        </div>
     </div>
     """
 
@@ -271,10 +357,30 @@ with s3:
 st.divider()
 
 if not df1.empty:
+    st.subheader("FDFDataHub")
     st.dataframe(df1, use_container_width=True)
 
 if not df2.empty:
+    st.subheader("FDFTCAP")
     st.dataframe(df2, use_container_width=True)
 
 if not df3.empty:
+    st.subheader("VehicleSettingRequester")
     st.dataframe(df3, use_container_width=True)
+
+# =========================
+# EXPORT
+# =========================
+if not df1.empty or not df2.empty or not df3.empty:
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        if not df1.empty:
+            df1.to_excel(writer, index=False, sheet_name='FDFDataHub')
+        if not df2.empty:
+            df2.to_excel(writer, index=False, sheet_name='FDFTCAP')
+        if not df3.empty:
+            df3.to_excel(writer, index=False, sheet_name='VehicleSettingRequester')
+
+    output.seek(0)
+
+    st.download_button("Download Excel", data=output, file_name="fdf-summary.xlsx")
