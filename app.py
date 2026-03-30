@@ -8,30 +8,41 @@ st.set_page_config(page_title="ITOSE - FDF", layout="wide")
 st.title("ITOSE Tools - FDF Summary")
 
 # =========================
-# 🎨 CSS (เหลือแค่ Summary + Label)
+# 🎨 CSS (ปรับเฉพาะ layout + text)
 # =========================
 st.markdown("""
 <style>
 
-/* Upload label */
-.upload-title {
-    font-size: 14px;
-    color: #9ca3af;
-    margin-bottom: 8px;
+/* ===== Title ===== */
+h1 {
+    margin-bottom: 30px;
 }
 
-/* Summary Card */
+/* ===== Upload label ===== */
+.upload-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: #e5e7eb;
+    margin-bottom: 10px;
+}
+
+/* spacing columns */
+[data-testid="column"] {
+    padding-top: 10px;
+}
+
+/* ขยับ uploader นิด */
+[data-testid="stFileUploader"] {
+    margin-top: 4px;
+}
+
+/* ===== Summary Card ===== */
 .card {
     padding: 20px;
     border-radius: 14px;
     background: linear-gradient(145deg, #0f172a, #111827);
     border: 1px solid #374151;
     text-align: center;
-    transition: all 0.2s ease-in-out;
-}
-.card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
 }
 .card-title {
     font-size: 14px;
@@ -46,7 +57,6 @@ st.markdown("""
     margin-top: 12px;
     padding: 12px;
     border-radius: 10px;
-    font-weight: 500;
     color: #4ade80;
     background: rgba(34,197,94,0.1);
     border: 1px solid rgba(34,197,94,0.3);
@@ -242,6 +252,9 @@ def parse_vehicle_setting(df):
 
     return pd.DataFrame(rows)
 
+# =========================
+# UPLOAD (ไม่มี Upload Files)
+# =========================
 c1, c2, c3 = st.columns(3)
 
 with c1:
@@ -307,15 +320,12 @@ with s3:
 st.divider()
 
 if not df1.empty:
-    st.subheader("FDFDataHub")
     st.dataframe(df1, use_container_width=True)
 
 if not df2.empty:
-    st.subheader("FDFTCAP")
     st.dataframe(df2, use_container_width=True)
 
 if not df3.empty:
-    st.subheader("VehicleSettingRequester")
     st.dataframe(df3, use_container_width=True)
 
 # =========================
