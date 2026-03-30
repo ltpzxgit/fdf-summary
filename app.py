@@ -12,31 +12,6 @@ st.title("ITOSE Tools - FDF Summary")
 # =========================
 st.markdown("""
 <style>
-
-/* ===== Title ===== */
-h1 {
-    margin-bottom: 30px;
-}
-
-/* ===== Upload label ===== */
-.upload-title {
-    font-size: 15px;
-    font-weight: 500;
-    color: #e5e7eb;
-    margin-bottom: 10px;
-}
-
-/* spacing columns */
-[data-testid="column"] {
-    padding-top: 10px;
-}
-
-/* ขยับ uploader นิด */
-[data-testid="stFileUploader"] {
-    margin-top: 4px;
-}
-
-/* ===== Summary Card ===== */
 .card {
     padding: 20px;
     border-radius: 14px;
