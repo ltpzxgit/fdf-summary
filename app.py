@@ -11,7 +11,7 @@ st.title("ITOSE Tools - FDF Summary")
 # REGEX
 # =========================
 UUID_REGEX = r'([a-f0-9\-]{36})'
-REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
+REQUEST_ID_REGEX = r'Request\s*ID[:\s]*([a-f0-9\-]{36})'
 
 # =========================
 # COMMON
@@ -21,7 +21,7 @@ def extract_uuid(text):
     return match.group(1) if match else None
 
 def extract_request_id(text):
-    match = re.search(REQUEST_ID_REGEX, text)
+    match = re.search(REQUEST_ID_REGEX, text, re.IGNORECASE)
     return match.group(1) if match else None
 
 
@@ -95,7 +95,7 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# 🔥 FDFTCAP (FINAL TRUE LOGIC)
+# 🔥 FDFTCAP FINAL
 # =========================
 def extract_json_from_log(log):
     if "Response" not in log:
@@ -124,6 +124,7 @@ def extract_json_from_log(log):
 
 def parse_fdf_tcap(df):
     rows = []
+    prev_request_id = None
 
     for val in df:
         if pd.isna(val):
@@ -131,18 +132,22 @@ def parse_fdf_tcap(df):
 
         text = str(val)
 
-        # 🔥 เอาทุก Response เป็น 1 แถว
+        # 👉 เก็บ RequestID จากบรรทัด INFO
+        req = extract_request_id(text)
+        if req:
+            prev_request_id = req
+
+        # 👉 หา JSON จาก DEBUG
         data = extract_json_from_log(text)
 
         if not data or "statusCode" not in data:
             continue
 
         uuid = extract_uuid(text)
-        request_id = extract_request_id(text)
 
         rows.append({
             "UUID": uuid,
-            "RequestID": request_id,
+            "RequestID": prev_request_id,  # 🔥 เอาจาก INFO ก่อนหน้า
             "CountInsert": data.get("countInsert", 0),
             "StatusCode": data.get("statusCode"),
             "Message": data.get("message")
