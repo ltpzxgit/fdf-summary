@@ -95,14 +95,9 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# 🔥 FDFTCAP (FINAL FIX)
+# 🔥 FDFTCAP (FINAL TRUE LOGIC)
 # =========================
 def extract_json_from_log(log):
-    """
-    ดึง JSON จาก log แบบโคตรถึก:
-    - ใช้คำว่า Response เป็น anchor
-    - หา { ถึง } ตัวสุดท้าย
-    """
     if "Response" not in log:
         return None
 
@@ -129,51 +124,28 @@ def extract_json_from_log(log):
 
 def parse_fdf_tcap(df):
     rows = []
-    uuid_groups = {}
 
-    # 👉 group ตาม UUID
     for val in df:
         if pd.isna(val):
             continue
 
         text = str(val)
-        uuid = extract_uuid(text)
 
-        if not uuid:
+        # 🔥 เอาทุก Response เป็น 1 แถว
+        data = extract_json_from_log(text)
+
+        if not data or "statusCode" not in data:
             continue
 
-        uuid_groups.setdefault(uuid, []).append(text)
-
-    # 👉 process ต่อ UUID
-    for uuid, logs in uuid_groups.items():
-
-        request_id = None
-        status_code = None
-        message = None
-        count_insert = 0
-
-        for log in logs:
-
-            # RequestID
-            if not request_id:
-                request_id = extract_request_id(log)
-
-            # 🔥 ใช้ function ใหม่
-            data = extract_json_from_log(log)
-
-            if data and "statusCode" in data:
-                status_code = data.get("statusCode")
-                message = data.get("message")
-
-                # 🔥 รวมทุกก้อน
-                count_insert += data.get("countInsert", 0)
+        uuid = extract_uuid(text)
+        request_id = extract_request_id(text)
 
         rows.append({
             "UUID": uuid,
             "RequestID": request_id,
-            "CountInsert": count_insert,
-            "StatusCode": status_code,
-            "Message": message
+            "CountInsert": data.get("countInsert", 0),
+            "StatusCode": data.get("statusCode"),
+            "Message": data.get("message")
         })
 
     df_out = pd.DataFrame(rows)
@@ -239,7 +211,7 @@ if file2:
 
     df2 = parse_fdf_tcap(df_file2)
 
-    st.subheader("FDFTCAP Summary (By UUID)")
+    st.subheader("FDFTCAP Summary (Raw Response)")
 
     if df2.empty:
         st.warning("⚠️ ไม่เจอข้อมูล")
@@ -250,7 +222,7 @@ if file2:
         fail = df2[df2["StatusCode"] != "000"].shape[0]
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total UUID", total_txn)
+        c1.metric("Total Response", total_txn)
         c2.metric("Total Insert", total_insert)
         c3.metric("Success (000)", success)
         c4.metric("Fail", fail)
