@@ -242,11 +242,6 @@ def parse_vehicle_setting(df):
 
     return pd.DataFrame(rows)
 
-# =========================
-# UPLOAD (default ล้วน)
-# =========================
-st.markdown("## Upload Files")
-
 c1, c2, c3 = st.columns(3)
 
 with c1:
