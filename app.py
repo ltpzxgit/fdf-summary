@@ -8,61 +8,19 @@ st.set_page_config(page_title="ITOSE - FDF", layout="wide")
 st.title("ITOSE Tools - FDF Summary")
 
 # =========================
-# 🎨 CSS FINAL (เหมือน ref)
+# 🎨 CSS (เหลือแค่ Summary + Label)
 # =========================
 st.markdown("""
 <style>
 
-/* ===== Upload Title ===== */
+/* Upload label */
 .upload-title {
     font-size: 14px;
     color: #9ca3af;
     margin-bottom: 8px;
 }
 
-/* ===== Upload Box ===== */
-[data-testid="stFileUploader"] {
-    background: linear-gradient(145deg, #2b2f3a, #1f2937);
-    border-radius: 14px;
-    padding: 20px;
-    border: 1px solid #374151;
-}
-
-/* Layout */
-[data-testid="stFileUploader"] section {
-    border: none !important;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-/* Text */
-[data-testid="stFileUploader"] section div {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-[data-testid="stFileUploader"] section div span {
-    font-size: 15px;
-    color: #e5e7eb;
-}
-
-/* Button */
-[data-testid="stFileUploader"] button {
-    background: #111827;
-    border: 1px solid #374151;
-    border-radius: 10px;
-    padding: 8px 16px;
-    color: white;
-}
-
-[data-testid="stFileUploader"] button:hover {
-    background: #1f2937;
-    border-color: #4b5563;
-}
-
-/* ===== Summary Card ===== */
+/* Summary Card */
 .card {
     padding: 20px;
     border-radius: 14px;
@@ -89,10 +47,9 @@ st.markdown("""
     padding: 12px;
     border-radius: 10px;
     font-weight: 500;
-}
-
-.block-container {
-    padding-top: 2rem;
+    color: #4ade80;
+    background: rgba(34,197,94,0.1);
+    border: 1px solid rgba(34,197,94,0.3);
 }
 
 </style>
@@ -286,7 +243,7 @@ def parse_vehicle_setting(df):
     return pd.DataFrame(rows)
 
 # =========================
-# UPLOAD
+# UPLOAD (default ล้วน)
 # =========================
 st.markdown("## Upload Files")
 
@@ -336,9 +293,7 @@ def card(title, value):
     <div class="card">
         <div class="card-title">{title}</div>
         <div class="card-value">{value}</div>
-        <div class="card-error" style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#4ade80;">
-            Error: 0
-        </div>
+        <div class="card-error">Error: 0</div>
     </div>
     """
 
