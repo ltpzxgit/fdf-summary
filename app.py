@@ -12,7 +12,6 @@ st.title("ITOSE Tools - FDF Summary")
 # =========================
 UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
-JSON_REGEX = r'\{.*\}'  # 🔥 FIX รองรับ multiline
 
 # =========================
 # COMMON
@@ -96,8 +95,38 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# FDFTCAP (🔥 FIX ALL)
+# 🔥 FDFTCAP (FINAL FIX)
 # =========================
+def extract_json_from_log(log):
+    """
+    ดึง JSON จาก log แบบโคตรถึก:
+    - ใช้คำว่า Response เป็น anchor
+    - หา { ถึง } ตัวสุดท้าย
+    """
+    if "Response" not in log:
+        return None
+
+    try:
+        part = log.split("Response", 1)[1]
+
+        start = part.find("{")
+        end = part.rfind("}") + 1
+
+        if start == -1 or end == -1:
+            return None
+
+        clean = part[start:end] \
+                    .replace('""', '"') \
+                    .replace('\n', '') \
+                    .replace('\r', '') \
+                    .strip()
+
+        return json.loads(clean)
+
+    except:
+        return None
+
+
 def parse_fdf_tcap(df):
     rows = []
     uuid_groups = {}
@@ -125,33 +154,19 @@ def parse_fdf_tcap(df):
 
         for log in logs:
 
-            # 👉 RequestID
+            # RequestID
             if not request_id:
                 request_id = extract_request_id(log)
 
-            # 👉 หา JSON แบบ multiline
-            json_matches = re.findall(JSON_REGEX, log, re.DOTALL)
+            # 🔥 ใช้ function ใหม่
+            data = extract_json_from_log(log)
 
-            for jm in json_matches:
-                try:
-                    clean = jm.replace('""', '"') \
-                              .replace('\n', '') \
-                              .replace('\r', '') \
-                              .strip()
+            if data and "statusCode" in data:
+                status_code = data.get("statusCode")
+                message = data.get("message")
 
-                    data = json.loads(clean)
-
-                    if "statusCode" in data:
-                        status_code = data.get("statusCode")
-                        message = data.get("message")
-
-                        # 🔥 FIX: บวกแทนการ overwrite
-                        count_insert += data.get("countInsert", 0)
-
-                except Exception as e:
-                    # debug ได้ถ้าจะเปิด
-                    # print("JSON ERROR:", jm)
-                    continue
+                # 🔥 รวมทุกก้อน
+                count_insert += data.get("countInsert", 0)
 
         rows.append({
             "UUID": uuid,
