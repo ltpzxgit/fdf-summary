@@ -8,14 +8,52 @@ st.set_page_config(page_title="ITOSE - FDF", layout="wide")
 st.title("ITOSE Tools - FDF Summary")
 
 # =========================
+# 🎨 STYLE
+# =========================
+st.markdown("""
+<style>
+.card {
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    border-radius: 20px;
+    padding: 30px;
+    text-align: center;
+    color: white;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+}
+.card-title {
+    font-size: 18px;
+    color: #94a3b8;
+}
+.card-value {
+    font-size: 48px;
+    font-weight: bold;
+    margin: 10px 0;
+}
+.card-error {
+    border: 1px solid #22c55e;
+    border-radius: 12px;
+    padding: 10px;
+    color: #22c55e;
+    margin-top: 10px;
+}
+.upload-box {
+    background: #0f172a;
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px dashed #334155;
+    text-align: center;
+    color: #cbd5f5;
+    margin-bottom: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
 # REGEX
 # =========================
 UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request\s*ID[:\s]*([a-f0-9\-]{36})'
 
-# =========================
-# COMMON
-# =========================
 def extract_uuid(text):
     m = re.search(UUID_REGEX, text)
     return m.group(1) if m else None
@@ -25,7 +63,7 @@ def extract_request_id(text):
     return m.group(1) if m else None
 
 # =========================
-# FDFDataHub (เดิม)
+# FDFDataHub
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -82,7 +120,7 @@ def parse_fdf_datahub(df):
     return df_out
 
 # =========================
-# FDFTCAP (เดิม)
+# FDFTCAP
 # =========================
 def extract_json_from_log(log):
     if "Response" not in log:
@@ -133,7 +171,7 @@ def parse_fdf_tcap(df):
     return df_out
 
 # =========================
-# 🔥 VehicleSettingRequester (NEW)
+# VehicleSettingRequester
 # =========================
 def extract_body_data(text):
     if "body={" not in text:
@@ -156,9 +194,7 @@ def extract_response_data(text):
         part = text.split("Response:", 1)[1]
         start = part.find("{")
         end = part.rfind("}") + 1
-        if start == -1 or end == -1:
-            return {}
-        clean = part[start:end].replace('""', '"').replace('\n', '').replace('\r', '').strip()
+        clean = part[start:end].replace('""', '"')
         data = json.loads(clean)
         return {
             "StatusCode": data.get("statusCode"),
@@ -194,10 +230,6 @@ def parse_vehicle_setting(df):
             "IMEI": data.get("IMEI"),
             "SimStatus": data.get("simStatus"),
             "SimPackage": data.get("simPackage"),
-            "CAL_Flag": data.get("CAL_Flag"),
-            "B2CFlag": data.get("B2CFlag"),
-            "B2BFlag": data.get("B2BFlag"),
-            "Tconnectflag": data.get("Tconnectflag"),
             "StatusCode": data.get("StatusCode"),
             "ResponseMessage": data.get("ResponseMessage"),
         })
@@ -205,57 +237,69 @@ def parse_vehicle_setting(df):
     return pd.DataFrame(rows)
 
 # =========================
-# UPLOAD
+# 📂 UPLOAD (3 ช่องสมดุล)
 # =========================
-col1, col2 = st.columns(2)
+st.markdown("## Upload Files")
 
-with col1:
-    file1 = st.file_uploader("Upload FDFDataHub", type=["xlsx","csv","json"])
+u1, u2, u3 = st.columns(3)
 
-with col2:
-    file2 = st.file_uploader("Upload FDFTCAP", type=["xlsx","csv","json"])
+with u1:
+    st.markdown('<div class="upload-box">FDFDataHub</div>', unsafe_allow_html=True)
+    file1 = st.file_uploader("", key="f1")
 
-file3 = st.file_uploader("Upload VehicleSettingRequester", type=["xlsx","csv","json"])
+with u2:
+    st.markdown('<div class="upload-box">FDFTCAP</div>', unsafe_allow_html=True)
+    file2 = st.file_uploader("", key="f2")
 
-df1 = pd.DataFrame()
-df2 = pd.DataFrame()
-df3 = pd.DataFrame()
+with u3:
+    st.markdown('<div class="upload-box">VehicleSettingRequester</div>', unsafe_allow_html=True)
+    file3 = st.file_uploader("", key="f3")
+
+df1, df2, df3 = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 # =========================
 # PROCESS
 # =========================
 if file1:
-    df_file1 = pd.read_csv(file1) if file1.name.endswith(".csv") else pd.read_excel(file1)
-    if "@message" in df_file1.columns:
-        df_file1 = df_file1["@message"]
-    df1 = parse_fdf_datahub(df_file1)
+    df = pd.read_csv(file1) if file1.name.endswith(".csv") else pd.read_excel(file1)
+    df1 = parse_fdf_datahub(df["@message"] if "@message" in df.columns else df)
 
 if file2:
-    df_file2 = pd.read_csv(file2) if file2.name.endswith(".csv") else pd.read_excel(file2)
-    if "@message" in df_file2.columns:
-        df_file2 = df_file2["@message"]
-    df2 = parse_fdf_tcap(df_file2)
+    df = pd.read_csv(file2) if file2.name.endswith(".csv") else pd.read_excel(file2)
+    df2 = parse_fdf_tcap(df["@message"] if "@message" in df.columns else df)
 
 if file3:
-    df_file3 = pd.read_csv(file3) if file3.name.endswith(".csv") else pd.read_excel(file3)
-    if "@message" in df_file3.columns:
-        df_file3 = df_file3["@message"]
-    df3 = parse_vehicle_setting(df_file3)
+    df = pd.read_csv(file3) if file3.name.endswith(".csv") else pd.read_excel(file3)
+    df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
 
 # =========================
 # SUMMARY
 # =========================
 st.markdown("## Summary")
 
-colA, colB = st.columns(2)
+total1 = len(df1)
+error1 = len(df1[df1["Status"] != "0000"]) if not df1.empty else 0
 
-with colA:
-    total_datahub = len(df1) if not df1.empty else 0
-    st.metric("TCAPLinkageDatahub", total_datahub)
+total2 = df2["CountInsert"].sum() if not df2.empty else 0
+error2 = len(df2[df2["StatusCode"] != "000"]) if not df2.empty else 0
 
-with colB:
-    total_insert = df2["CountInsert"].sum() if not df2.empty else 0
-    st.metric("TCAPLinkage (Insert)", total_insert)
+total3 = len(df3)
+error3 = len(df3[df3["StatusCode"] != "000"]) if not df3.empty else 0
+
+c1, c2, c3 = st.columns(3)
+
+def card(title, value, error):
+    st.markdown(f"""
+    <div class="card">
+        <div class="card-title">{title}</div>
+        <div class="card-value">{value}</div>
+        <div class="card-error">Error: {error}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c1: card("TCAPLinkageDatahub", total1, error1)
+with c2: card("TCAPLinkage", total2, error2)
+with c3: card("VehicleSettingRequester", total3, error3)
 
 # =========================
 # TABLE
@@ -289,8 +333,4 @@ if not df1.empty or not df2.empty or not df3.empty:
 
     output.seek(0)
 
-    st.download_button(
-        "Download Excel",
-        data=output,
-        file_name="fdf-summary.xlsx"
-    )
+    st.download_button("Download Excel", data=output, file_name="fdf-summary.xlsx")
