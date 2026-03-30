@@ -27,7 +27,7 @@ def extract_request_id(text):
 
 
 # =========================
-# FDFDataHub
+# FDFDataHub (ห้ามยุ่ง ✅)
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -96,43 +96,40 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# FDFTCAP (🔥 FIXED จริง)
+# FDFTCAP (🔥 FIX: group by UUID)
 # =========================
 def parse_fdf_tcap(df):
     rows = []
-    req_groups = {}
+    uuid_groups = {}
 
-    # 👉 group ตาม RequestID
+    # 👉 group ตาม UUID
     for val in df:
         if pd.isna(val):
             continue
 
         text = str(val)
+        uuid = extract_uuid(text)
 
-        req_id = extract_request_id(text)
-
-        if not req_id:
+        if not uuid:
             continue
 
-        req_groups.setdefault(req_id, []).append(text)
+        uuid_groups.setdefault(uuid, []).append(text)
 
-    # 👉 process ต่อ RequestID
-    for req_id, logs in req_groups.items():
+    # 👉 process ต่อ UUID
+    for uuid, logs in uuid_groups.items():
 
-        uuid = None
+        request_id = None
         status_code = None
         message = None
         count_insert = 0
 
         for log in logs:
 
-            # UUID
-            if not uuid:
-                u = re.search(UUID_REGEX, log)
-                if u:
-                    uuid = u.group(1)
+            # 👉 ดึง RequestID จาก INFO
+            if not request_id:
+                request_id = extract_request_id(log)
 
-            # 🔥 หา JSON ทุกก้อนใน log
+            # 👉 หา JSON จาก DEBUG
             json_matches = re.findall(JSON_REGEX, log)
 
             for jm in json_matches:
@@ -153,8 +150,8 @@ def parse_fdf_tcap(df):
                     continue
 
         rows.append({
-            "RequestID": req_id,
             "UUID": uuid,
+            "RequestID": request_id,
             "CountInsert": count_insert,
             "StatusCode": status_code,
             "Message": message
@@ -193,7 +190,6 @@ if file1:
     else:
         df_file1 = pd.read_csv(file1) if file1.name.endswith(".csv") else pd.read_excel(file1)
 
-    # 🔥 FIX: ใช้ column เดียว
     if isinstance(df_file1, pd.DataFrame) and "@message" in df_file1.columns:
         df_file1 = df_file1["@message"]
 
@@ -219,13 +215,12 @@ if file2:
     else:
         df_file2 = pd.read_csv(file2) if file2.name.endswith(".csv") else pd.read_excel(file2)
 
-    # 🔥 FIX: ใช้ column เดียว
     if isinstance(df_file2, pd.DataFrame) and "@message" in df_file2.columns:
         df_file2 = df_file2["@message"]
 
     df2 = parse_fdf_tcap(df_file2)
 
-    st.subheader("FDFTCAP Summary (By RequestID)")
+    st.subheader("FDFTCAP Summary (By UUID)")
 
     if df2.empty:
         st.warning("⚠️ ไม่เจอข้อมูล")
@@ -236,13 +231,12 @@ if file2:
         fail = df2[df2["StatusCode"] != "000"].shape[0]
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Request", total_txn)
+        c1.metric("Total UUID", total_txn)
         c2.metric("Total Insert", total_insert)
         c3.metric("Success (000)", success)
         c4.metric("Fail", fail)
 
         st.divider()
-
         st.dataframe(df2, use_container_width=True)
 
 
