@@ -8,31 +8,42 @@ st.set_page_config(page_title="ITOSE - FDF", layout="wide")
 st.title("ITOSE Tools - FDF Summary")
 
 # =========================
-# 🎨 STYLE
+# 🎨 STYLE (เหมือน repo)
 # =========================
 st.markdown("""
 <style>
-.upload-card {
+
+/* Upload title */
+.upload-title-box {
     background: #1e293b;
-    border-radius: 16px;
     padding: 20px;
+    border-radius: 16px;
     text-align: center;
-    height: 120px;
-}
-.upload-title {
-    font-size: 16px;
     color: #cbd5f5;
+    font-size: 16px;
+    margin-bottom: 10px;
 }
+
+/* File uploader */
+[data-testid="stFileUploader"] {
+    background: #1f2937;
+    padding: 25px;
+    border-radius: 16px;
+    border: none;
+}
+[data-testid="stFileUploader"] section {
+    border: none;
+}
+
+/* Summary */
 .summary-card {
     background: linear-gradient(135deg, #1e293b, #0f172a);
     border-radius: 24px;
     padding: 40px;
     text-align: center;
     color: white;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
 }
 .summary-title {
-    font-size: 18px;
     color: #94a3b8;
 }
 .summary-value {
@@ -42,10 +53,11 @@ st.markdown("""
 .summary-error {
     border: 1px solid #22c55e;
     border-radius: 14px;
-    padding: 10px;
+    padding: 12px;
     margin-top: 15px;
     color: #22c55e;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -81,12 +93,10 @@ def parse_fdf_datahub(df):
     uuid_groups = {}
 
     for val in df:
-        if pd.isna(val):
-            continue
+        if pd.isna(val): continue
         text = str(val)
         uuid = extract_uuid(text)
-        if not uuid:
-            continue
+        if not uuid: continue
         uuid_groups.setdefault(uuid, []).append(text)
 
     for uuid, logs in uuid_groups.items():
@@ -169,8 +179,38 @@ def parse_fdf_tcap(df):
     return df_out
 
 # =========================
-# VehicleSettingRequester
+# VehicleSettingRequester (FULL)
 # =========================
+def extract_body_data(text):
+    if "body={" not in text:
+        return {}
+    try:
+        part = text.split("body={", 1)[1].split("}", 1)[0]
+        data = {}
+        for item in part.split(","):
+            if "=" in item:
+                k, v = item.split("=", 1)
+                data[k.strip()] = v.strip()
+        return data
+    except:
+        return {}
+
+def extract_response_data(text):
+    if "Response:" not in text:
+        return {}
+    try:
+        part = text.split("Response:", 1)[1]
+        start = part.find("{")
+        end = part.rfind("}") + 1
+        clean = part[start:end].replace('""', '"').replace('\n','').replace('\r','')
+        data = json.loads(clean)
+        return {
+            "StatusCode": data.get("statusCode"),
+            "ResponseMessage": data.get("message")
+        }
+    except:
+        return {}
+
 def parse_vehicle_setting(df):
     logs = [str(x) for x in df if not pd.isna(x)]
     uuid_map = {}
@@ -182,24 +222,28 @@ def parse_vehicle_setting(df):
 
         uuid_map.setdefault(uuid, {})
 
-        if "vin=" in text:
-            uuid_map[uuid]["VIN"] = text.split("vin=")[1].split(",")[0]
+        if "Request:" in text:
+            uuid_map[uuid].update(extract_body_data(text))
 
         if "Response:" in text:
-            try:
-                part = text.split("Response:",1)[1]
-                data = json.loads(part.replace('""','"'))
-                uuid_map[uuid]["StatusCode"] = data.get("statusCode")
-            except:
-                pass
+            uuid_map[uuid].update(extract_response_data(text))
 
     rows = []
-    for i, (uuid, data) in enumerate(uuid_map.items(),1):
+    for i, (uuid, data) in enumerate(uuid_map.items(), start=1):
         rows.append({
             "No.": i,
             "UUID": uuid,
-            "VIN": data.get("VIN"),
-            "StatusCode": data.get("StatusCode")
+            "VIN": data.get("vin"),
+            "DeviceID": data.get("deviceId"),
+            "IMEI": data.get("IMEI"),
+            "SimStatus": data.get("simStatus"),
+            "SimPackage": data.get("simPackage"),
+            "CAL_Flag": data.get("CAL_Flag"),
+            "B2CFlag": data.get("B2CFlag"),
+            "B2BFlag": data.get("B2BFlag"),
+            "Tconnectflag": data.get("Tconnectflag"),
+            "StatusCode": data.get("StatusCode"),
+            "ResponseMessage": data.get("ResponseMessage"),
         })
 
     return pd.DataFrame(rows)
@@ -207,30 +251,30 @@ def parse_vehicle_setting(df):
 # =========================
 # 📂 UPLOAD (3 ช่อง)
 # =========================
-st.markdown("### Upload Files")
+st.markdown("## Upload Files")
 
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    st.markdown('<div class="upload-card"><div class="upload-title">FDFDataHub</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="upload-title-box">FDFDataHub</div>', unsafe_allow_html=True)
     file1 = st.file_uploader("", key="f1")
 
 with c2:
-    st.markdown('<div class="upload-card"><div class="upload-title">FDFTCAP</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="upload-title-box">FDFTCAP</div>', unsafe_allow_html=True)
     file2 = st.file_uploader("", key="f2")
 
 with c3:
-    st.markdown('<div class="upload-card"><div class="upload-title">VehicleSettingRequester</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="upload-title-box">VehicleSettingRequester</div>', unsafe_allow_html=True)
     file3 = st.file_uploader("", key="f3")
-
-df1, df2, df3 = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-
-def read_file(file):
-    return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
 
 # =========================
 # PROCESS
 # =========================
+def read_file(file):
+    return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
+
+df1 = df2 = df3 = pd.DataFrame()
+
 if file1:
     df = read_file(file1)
     df1 = parse_fdf_datahub(df["@message"] if "@message" in df.columns else df)
@@ -244,14 +288,11 @@ if file3:
     df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
 
 # =========================
-# SUMMARY (ไม่ต้องนับ error)
+# SUMMARY (3 กล่อง)
 # =========================
 st.markdown("## Summary")
 
-total1 = len(df1)
-total2 = df2["CountInsert"].sum() if not df2.empty else 0
-
-s1, s2 = st.columns(2)
+s1, s2, s3 = st.columns(3)
 
 def card(title, value):
     st.markdown(f"""
@@ -263,10 +304,13 @@ def card(title, value):
     """, unsafe_allow_html=True)
 
 with s1:
-    card("TCAPLinkageDatahub", total1)
+    card("TCAPLinkageDatahub", len(df1))
 
 with s2:
-    card("TCAPLinkage", total2)
+    card("TCAPLinkage", df2["CountInsert"].sum() if not df2.empty else 0)
+
+with s3:
+    card("VehicleSettingRequester", len(df3))
 
 # =========================
 # TABLE
