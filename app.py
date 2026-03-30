@@ -26,7 +26,7 @@ def extract_request_id(text):
 
 
 # =========================
-# FDFDataHub (ห้ามยุ่ง)
+# FDFDataHub
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -95,7 +95,7 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# 🔥 FDFTCAP FINAL (2-PASS FIX)
+# FDFTCAP
 # =========================
 def extract_json_from_log(log):
     if "Response" not in log:
@@ -127,11 +127,8 @@ def parse_fdf_tcap(df):
 
     logs = [str(x) for x in df if not pd.isna(x)]
 
-    # =========================
-    # PASS 1: map UUID → RequestID
-    # =========================
+    # 👉 map UUID → RequestID
     uuid_to_req = {}
-
     for text in logs:
         uuid = extract_uuid(text)
         req = extract_request_id(text)
@@ -139,11 +136,8 @@ def parse_fdf_tcap(df):
         if uuid and req:
             uuid_to_req[uuid] = req
 
-    # =========================
-    # PASS 2: extract response
-    # =========================
+    # 👉 extract response
     for text in logs:
-
         data = extract_json_from_log(text)
 
         if not data or "statusCode" not in data:
@@ -153,7 +147,7 @@ def parse_fdf_tcap(df):
 
         rows.append({
             "UUID": uuid,
-            "RequestID": uuid_to_req.get(uuid),  # 🔥 ไม่หายแล้ว
+            "RequestID": uuid_to_req.get(uuid),
             "CountInsert": data.get("countInsert", 0),
             "StatusCode": data.get("statusCode"),
             "Message": data.get("message")
@@ -183,63 +177,82 @@ df1 = pd.DataFrame()
 df2 = pd.DataFrame()
 
 # =========================
-# DATAHUB
+# PROCESS
 # =========================
 if file1:
-    if file1.name.endswith(".json"):
-        df_file1 = pd.read_json(file1)
+    df_file1 = pd.read_csv(file1) if file1.name.endswith(".csv") else pd.read_excel(file1)
+    if "@message" in df_file1.columns:
         df_file1 = df_file1["@message"]
-    else:
-        df_file1 = pd.read_csv(file1) if file1.name.endswith(".csv") else pd.read_excel(file1)
-
-    if isinstance(df_file1, pd.DataFrame) and "@message" in df_file1.columns:
-        df_file1 = df_file1["@message"]
-
     df1 = parse_fdf_datahub(df_file1)
 
-    st.subheader("FDFDataHub")
-
-    if df1.empty:
-        st.warning("⚠️ ไม่เจอข้อมูล")
-    else:
-        st.dataframe(df1, use_container_width=True)
-        st.markdown(f"### 🔢 Total Rows: {len(df1)}")
-        st.markdown(f"### 🧠 Unique VIN: {df1['VIN'].nunique()}")
-
-
-# =========================
-# TCAP
-# =========================
 if file2:
-    if file2.name.endswith(".json"):
-        df_file2 = pd.read_json(file2)
+    df_file2 = pd.read_csv(file2) if file2.name.endswith(".csv") else pd.read_excel(file2)
+    if "@message" in df_file2.columns:
         df_file2 = df_file2["@message"]
-    else:
-        df_file2 = pd.read_csv(file2) if file2.name.endswith(".csv") else pd.read_excel(file2)
-
-    if isinstance(df_file2, pd.DataFrame) and "@message" in df_file2.columns:
-        df_file2 = df_file2["@message"]
-
     df2 = parse_fdf_tcap(df_file2)
 
-    st.subheader("FDFTCAP Summary")
 
-    if df2.empty:
-        st.warning("⚠️ ไม่เจอข้อมูล")
-    else:
-        total_txn = len(df2)
-        total_insert = df2["CountInsert"].sum()
-        success = df2[df2["StatusCode"] == "000"].shape[0]
-        fail = df2[df2["StatusCode"] != "000"].shape[0]
+# =========================
+# 🔥 SUMMARY UI
+# =========================
+st.markdown("## Summary")
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Response", total_txn)
-        c2.metric("Total Insert", total_insert)
-        c3.metric("Success (000)", success)
-        c4.metric("Fail", fail)
+colA, colB = st.columns(2)
 
-        st.divider()
-        st.dataframe(df2, use_container_width=True)
+with colA:
+    total_datahub = len(df1) if not df1.empty else 0
+
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #0f172a, #1e293b);
+                padding: 30px;
+                border-radius: 15px;
+                text-align: center;
+                border: 1px solid #334155;">
+        <h4 style="color:#94a3b8;">TCAPLinkageDatahub</h4>
+        <h1 style="color:white; font-size:48px;">{total_datahub}</h1>
+        <div style="margin-top:15px; padding:10px;
+                    border-radius:10px;
+                    border:1px solid #22c55e;
+                    color:#22c55e;">
+            Error: 0
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+with colB:
+    total_insert = df2["CountInsert"].sum() if not df2.empty else 0
+
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #0f172a, #1e293b);
+                padding: 30px;
+                border-radius: 15px;
+                text-align: center;
+                border: 1px solid #334155;">
+        <h4 style="color:#94a3b8;">TCAPLinkage</h4>
+        <h1 style="color:white; font-size:48px;">{total_insert}</h1>
+        <div style="margin-top:15px; padding:10px;
+                    border-radius:10px;
+                    border:1px solid #22c55e;
+                    color:#22c55e;">
+            Error: 0
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# =========================
+# TABLE
+# =========================
+st.divider()
+
+if not df1.empty:
+    st.subheader("FDFDataHub")
+    st.dataframe(df1, use_container_width=True)
+
+if not df2.empty:
+    st.subheader("FDFTCAP")
+    st.dataframe(df2, use_container_width=True)
 
 
 # =========================
@@ -257,7 +270,7 @@ if not df1.empty or not df2.empty:
     output.seek(0)
 
     st.download_button(
-        "Download Excel (All)",
+        "Download Excel",
         data=output,
         file_name="fdf-summary.xlsx"
     )
