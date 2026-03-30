@@ -12,7 +12,7 @@ st.title("ITOSE Tools - FDF Summary")
 # =========================
 UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request ID:\s*([a-f0-9\-]{36})'
-JSON_REGEX = r'\{.*?\}'
+JSON_REGEX = r'\{.*\}'  # 🔥 FIX รองรับ multiline
 
 # =========================
 # COMMON
@@ -27,7 +27,7 @@ def extract_request_id(text):
 
 
 # =========================
-# FDFDataHub (ห้ามยุ่ง ✅)
+# FDFDataHub (ห้ามยุ่ง)
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -96,7 +96,7 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# FDFTCAP (🔥 FIX: group by UUID)
+# FDFTCAP (🔥 FIX ALL)
 # =========================
 def parse_fdf_tcap(df):
     rows = []
@@ -125,12 +125,12 @@ def parse_fdf_tcap(df):
 
         for log in logs:
 
-            # 👉 ดึง RequestID จาก INFO
+            # 👉 RequestID
             if not request_id:
                 request_id = extract_request_id(log)
 
-            # 👉 หา JSON จาก DEBUG
-            json_matches = re.findall(JSON_REGEX, log)
+            # 👉 หา JSON แบบ multiline
+            json_matches = re.findall(JSON_REGEX, log, re.DOTALL)
 
             for jm in json_matches:
                 try:
@@ -144,9 +144,13 @@ def parse_fdf_tcap(df):
                     if "statusCode" in data:
                         status_code = data.get("statusCode")
                         message = data.get("message")
-                        count_insert = data.get("countInsert", 0)
 
-                except:
+                        # 🔥 FIX: บวกแทนการ overwrite
+                        count_insert += data.get("countInsert", 0)
+
+                except Exception as e:
+                    # debug ได้ถ้าจะเปิด
+                    # print("JSON ERROR:", jm)
                     continue
 
         rows.append({
