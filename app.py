@@ -95,7 +95,7 @@ def parse_fdf_datahub(df):
 
 
 # =========================
-# 🔥 FDFTCAP FINAL
+# 🔥 FDFTCAP FINAL (2-PASS FIX)
 # =========================
 def extract_json_from_log(log):
     if "Response" not in log:
@@ -124,20 +124,26 @@ def extract_json_from_log(log):
 
 def parse_fdf_tcap(df):
     rows = []
-    prev_request_id = None
 
-    for val in df:
-        if pd.isna(val):
-            continue
+    logs = [str(x) for x in df if not pd.isna(x)]
 
-        text = str(val)
+    # =========================
+    # PASS 1: map UUID → RequestID
+    # =========================
+    uuid_to_req = {}
 
-        # 👉 เก็บ RequestID จากบรรทัด INFO
+    for text in logs:
+        uuid = extract_uuid(text)
         req = extract_request_id(text)
-        if req:
-            prev_request_id = req
 
-        # 👉 หา JSON จาก DEBUG
+        if uuid and req:
+            uuid_to_req[uuid] = req
+
+    # =========================
+    # PASS 2: extract response
+    # =========================
+    for text in logs:
+
         data = extract_json_from_log(text)
 
         if not data or "statusCode" not in data:
@@ -147,7 +153,7 @@ def parse_fdf_tcap(df):
 
         rows.append({
             "UUID": uuid,
-            "RequestID": prev_request_id,  # 🔥 เอาจาก INFO ก่อนหน้า
+            "RequestID": uuid_to_req.get(uuid),  # 🔥 ไม่หายแล้ว
             "CountInsert": data.get("countInsert", 0),
             "StatusCode": data.get("statusCode"),
             "Message": data.get("message")
