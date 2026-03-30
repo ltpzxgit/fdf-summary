@@ -25,7 +25,7 @@ def extract_request_id(text):
     return m.group(1) if m else None
 
 # =========================
-# FDFDataHub
+# FDFDataHub (เดิม)
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -82,7 +82,7 @@ def parse_fdf_datahub(df):
     return df_out
 
 # =========================
-# FDFTCAP
+# FDFTCAP (เดิม)
 # =========================
 def extract_json_from_log(log):
     if "Response" not in log:
@@ -133,7 +133,7 @@ def parse_fdf_tcap(df):
     return df_out
 
 # =========================
-# VehicleSettingRequester
+# 🔥 VehicleSettingRequester (NEW)
 # =========================
 def extract_body_data(text):
     if "body={" not in text:
@@ -205,20 +205,17 @@ def parse_vehicle_setting(df):
     return pd.DataFrame(rows)
 
 # =========================
-# 🔥 UPLOAD (3 COL BALANCED)
+# UPLOAD
 # =========================
-st.markdown("## Upload Files")
-
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 with col1:
-    file1 = st.file_uploader("FDFDataHub", type=["xlsx","csv","json"])
+    file1 = st.file_uploader("Upload FDFDataHub", type=["xlsx","csv","json"])
 
 with col2:
-    file2 = st.file_uploader("FDFTCAP", type=["xlsx","csv","json"])
+    file2 = st.file_uploader("Upload FDFTCAP", type=["xlsx","csv","json"])
 
-with col3:
-    file3 = st.file_uploader("VehicleSettingRequester", type=["xlsx","csv","json"])
+file3 = st.file_uploader("Upload VehicleSettingRequester", type=["xlsx","csv","json"])
 
 df1 = pd.DataFrame()
 df2 = pd.DataFrame()
@@ -246,20 +243,19 @@ if file3:
     df3 = parse_vehicle_setting(df_file3)
 
 # =========================
-# 🔥 SUMMARY (3 CARD)
+# SUMMARY
 # =========================
 st.markdown("## Summary")
 
-c1, c2, c3 = st.columns(3)
+colA, colB = st.columns(2)
 
-with c1:
-    st.metric("FDFDataHub", len(df1))
+with colA:
+    total_datahub = len(df1) if not df1.empty else 0
+    st.metric("TCAPLinkageDatahub", total_datahub)
 
-with c2:
-    st.metric("FDFTCAP", len(df2))
-
-with c3:
-    st.metric("VehicleSettingRequester", len(df3))
+with colB:
+    total_insert = df2["CountInsert"].sum() if not df2.empty else 0
+    st.metric("TCAPLinkage (Insert)", total_insert)
 
 # =========================
 # TABLE
@@ -283,7 +279,6 @@ if not df3.empty:
 # =========================
 if not df1.empty or not df2.empty or not df3.empty:
     output = BytesIO()
-
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         if not df1.empty:
             df1.to_excel(writer, index=False, sheet_name='FDFDataHub')
