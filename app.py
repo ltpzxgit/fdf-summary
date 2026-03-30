@@ -197,7 +197,7 @@ if file1:
 
     df1 = parse_fdf_datahub(df_file1)
 
-    st.subheader("FDFDataHub (Latest per VIN | No 0008)")
+    st.subheader("FDFDataHub")
 
     if df1.empty:
         st.warning("⚠️ ไม่เจอข้อมูล")
@@ -222,7 +222,7 @@ if file2:
 
     df2 = parse_fdf_tcap(df_file2)
 
-    st.subheader("FDFTCAP Summary (Raw Response)")
+    st.subheader("FDFTCAP Summary")
 
     if df2.empty:
         st.warning("⚠️ ไม่เจอข้อมูล")
