@@ -8,7 +8,7 @@ st.set_page_config(page_title="ITOSE - FDF", layout="wide")
 st.title("ITOSE Tools - FDF Summary")
 
 # =========================
-# 🎨 CSS (ปรับเฉพาะ layout + text)
+# CSS
 # =========================
 st.markdown("""
 <style>
@@ -17,6 +17,13 @@ st.markdown("""
     border-radius: 14px;
     background: linear-gradient(145deg, #0f172a, #111827);
     border: 1px solid #374151;
+    text-align: center;
+}
+.card-red {
+    padding: 20px;
+    border-radius: 14px;
+    background: linear-gradient(145deg, #2a0f0f, #1a0f0f);
+    border: 1px solid #7f1d1d;
     text-align: center;
 }
 .card-title {
@@ -36,15 +43,36 @@ st.markdown("""
     background: rgba(34,197,94,0.1);
     border: 1px solid rgba(34,197,94,0.3);
 }
-
+.card-error-red {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    color: #f87171;
+    background: rgba(248,113,113,0.1);
+    border: 1px solid rgba(248,113,113,0.3);
+}
 </style>
 """, unsafe_allow_html=True)
+
+# =========================
+# CARD FUNCTION (🔥 UPDATED)
+# =========================
+def card(title, value, is_red=False):
+    card_class = "card-red" if is_red else "card"
+
+    return f"""
+    <div class="{card_class}">
+        <div class="card-title">{title}</div>
+        <div class="card-value">{value}</div>
+    </div>
+    """
 
 # =========================
 # REGEX
 # =========================
 UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request\s*ID[:\s]*([a-f0-9\-]{36})'
+VIN_REGEX = r'"vin"\s*:\s*"([A-Z0-9]+)"'
 
 def extract_uuid(text):
     m = re.search(UUID_REGEX, text)
@@ -53,6 +81,9 @@ def extract_uuid(text):
 def extract_request_id(text):
     m = re.search(REQUEST_ID_REGEX, text, re.IGNORECASE)
     return m.group(1) if m else None
+
+def extract_vin(text):
+    return re.findall(VIN_REGEX, text)
 
 # =========================
 # FDFDataHub
@@ -98,16 +129,48 @@ def parse_fdf_datahub(df):
                     "Status": str(item.get("status"))
                 })
 
+        elif response_data is None:
+            for log in logs:
+                if "Response:" in log and '""vin""' in log:
+                    clean = log.replace('""', '"')
+                    vins = re.findall(r'"vin"\s*:\s*"([A-Z0-9]+)"', clean)
+                    messages = re.findall(r'"message"\s*:\s*"([^"]+)"', clean)
+                    statuses = re.findall(r'"status"\s*:\s*"(\d+)"', clean)
+
+                    for i in range(len(vins)):
+                        rows.append({
+                            "RequestID": request_id,
+                            "VIN": vins[i],
+                            "Message": messages[i] if i < len(messages) else None,
+                            "Status": statuses[i] if i < len(statuses) else None
+                        })
+
     df_out = pd.DataFrame(rows)
+    df_error = pd.DataFrame()
 
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
-        df_out = df_out[df_out["Status"] != "0008"]
+
+        df_error = df_out[
+            df_out["Message"].str.contains("Not Valid|Device serial no. is duplicated", case=False, na=False)
+        ].copy()
+
+        df_out = df_out[
+            ~df_out["Message"].str.contains("Not Valid|Device serial no. is duplicated", case=False, na=False)
+        ].copy()
+
         df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
         df_out = df_out.reset_index(drop=True)
-        df_out.insert(0, "No.", df_out.index + 1)
+        df_out["No."] = range(1, len(df_out)+1)
+        df_out = df_out[["No."] + [c for c in df_out.columns if c != "No."]]
 
-    return df_out
+        if not df_error.empty:
+            df_error = df_error.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
+            df_error = df_error.reset_index(drop=True)
+            df_error["No."] = range(1, len(df_error)+1)
+            df_error = df_error[["No."] + [c for c in df_error.columns if c != "No."]]
+
+    return df_out, df_error
 
 # =========================
 # FDFTCAP
@@ -137,23 +200,27 @@ def parse_fdf_tcap(df):
 
     for text in logs:
         data = extract_json_from_log(text)
-        if not data:
-            continue
-
         uuid = extract_uuid(text)
+        vins = extract_vin(text)
 
-        rows.append({
-            "UUID": uuid,
-            "RequestID": uuid_to_req.get(uuid),
-            "CountInsert": data.get("countInsert", 0),
-            "StatusCode": data.get("statusCode"),
-            "Message": data.get("message")
-        })
+        if vins:
+            for vin in vins:
+                rows.append({
+                    "UUID": uuid,
+                    "RequestID": uuid_to_req.get(uuid),
+                    "VIN": vin,
+                    "StatusCode": data.get("statusCode") if data else None,
+                    "Message": data.get("message") if data else None
+                })
 
     df_out = pd.DataFrame(rows)
 
     if not df_out.empty:
-        df_out.insert(0, "No.", range(1, len(df_out)+1))
+        df_out = df_out[df_out["VIN"].notna()]
+        df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
+        df_out = df_out.reset_index(drop=True)
+        df_out["No."] = range(1, len(df_out)+1)
+        df_out = df_out[["No."] + [c for c in df_out.columns if c != "No."]]
 
     return df_out
 
@@ -228,33 +295,25 @@ def parse_vehicle_setting(df):
     return pd.DataFrame(rows)
 
 # =========================
-# UPLOAD (ไม่มี Upload Files)
+# UPLOAD
 # =========================
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    st.markdown('<div class="upload-title">FDFDataHub</div>', unsafe_allow_html=True)
-    file1 = st.file_uploader("", key="f1")
-
+    file1 = st.file_uploader("FDFDataHub", key="f1")
 with c2:
-    st.markdown('<div class="upload-title">FDFTCAP</div>', unsafe_allow_html=True)
-    file2 = st.file_uploader("", key="f2")
-
+    file2 = st.file_uploader("FDFTCAP", key="f2")
 with c3:
-    st.markdown('<div class="upload-title">VehicleSettingRequester</div>', unsafe_allow_html=True)
-    file3 = st.file_uploader("", key="f3")
+    file3 = st.file_uploader("VehicleSettingRequester", key="f3")
 
-# =========================
-# PROCESS
-# =========================
 def read_file(file):
     return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
 
-df1 = df2 = df3 = pd.DataFrame()
+df1 = df2 = df3 = df_error = df_broken = df_fdf_error = pd.DataFrame()
 
 if file1:
     df = read_file(file1)
-    df1 = parse_fdf_datahub(df["@message"] if "@message" in df.columns else df)
+    df1, df_error = parse_fdf_datahub(df["@message"] if "@message" in df.columns else df)
 
 if file2:
     df = read_file(file2)
@@ -265,29 +324,69 @@ if file3:
     df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
 
 # =========================
-# SUMMARY
+# DEVICE BROKEN
+# =========================
+if not df1.empty:
+    vins_1 = set(df1["VIN"].dropna())
+    vins_2 = set(df2["VIN"].dropna()) if not df2.empty else set()
+
+    broken_vins = vins_1 - vins_2
+
+    if broken_vins:
+        df_broken = df1[df1["VIN"].isin(broken_vins)].copy()
+        df_broken = df_broken.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
+        df_broken = df_broken.reset_index(drop=True)
+
+        df_broken["No."] = range(1, len(df_broken)+1)
+        df_broken = df_broken[["No."] + [c for c in df_broken.columns if c != "No."]]
+
+        df1 = df1[~df1["VIN"].isin(broken_vins)].copy()
+        df1 = df1.reset_index(drop=True)
+        df1["No."] = range(1, len(df1)+1)
+        df1 = df1[["No."] + [c for c in df1.columns if c != "No."]]
+
+# =========================
+# FDF ERROR
+# =========================
+if not df1.empty:
+    vins_1 = set(df1["VIN"].dropna())
+    vins_3 = set(df3["VIN"].dropna()) if not df3.empty else set()
+
+    error_vins = vins_1 - vins_3
+
+    if error_vins:
+        df_fdf_error = df1[df1["VIN"].isin(error_vins)].copy()
+        df_fdf_error = df_fdf_error.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
+        df_fdf_error = df_fdf_error.reset_index(drop=True)
+
+        df_fdf_error["No."] = range(1, len(df_fdf_error)+1)
+        df_fdf_error = df_fdf_error[["No."] + [c for c in df_fdf_error.columns if c != "No."]]
+
+# =========================
+# SUMMARY (🔥 UPDATED)
 # =========================
 st.markdown("## Summary")
 
-s1, s2, s3 = st.columns(3)
+r1 = st.columns(3)
+r2 = st.columns(3)
 
-def card(title, value):
-    return f"""
-    <div class="card">
-        <div class="card-title">{title}</div>
-        <div class="card-value">{value}</div>
-        <div class="card-error">Error: 0</div>
-    </div>
-    """
-
-with s1:
-    st.markdown(card("TCAPLinkageDatahub", len(df1)), unsafe_allow_html=True)
-
-with s2:
-    st.markdown(card("TCAPLinkage", df2["CountInsert"].sum() if not df2.empty else 0), unsafe_allow_html=True)
-
-with s3:
+# แถวบน (ปกติ)
+with r1[0]:
+    st.markdown(card("FDFDataHub", len(df1)), unsafe_allow_html=True)
+with r1[1]:
+    st.markdown(card("FDFTCAP", len(df2)), unsafe_allow_html=True)
+with r1[2]:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+
+# แถวล่าง (แดงตลอด)
+with r2[0]:
+    st.markdown(card("Not Valid & Duplicate", len(df_error), True), unsafe_allow_html=True)
+with r2[1]:
+    st.markdown(card("Device Broken", len(df_broken), True), unsafe_allow_html=True)
+with r2[2]:
+    st.markdown(card("FDF Error", len(df_fdf_error), True), unsafe_allow_html=True)
 
 # =========================
 # TABLE
@@ -295,13 +394,28 @@ with s3:
 st.divider()
 
 if not df1.empty:
+    st.subheader("FDFDataHub")
     st.dataframe(df1, use_container_width=True)
 
 if not df2.empty:
+    st.subheader("FDFTCAP")
     st.dataframe(df2, use_container_width=True)
 
 if not df3.empty:
+    st.subheader("VehicleSettingRequester")
     st.dataframe(df3, use_container_width=True)
+
+if not df_error.empty:
+    st.subheader("Not Valid & Duplicate")
+    st.dataframe(df_error, use_container_width=True)
+
+if not df_broken.empty:
+    st.subheader("Device Broken")
+    st.dataframe(df_broken, use_container_width=True)
+
+if not df_fdf_error.empty:
+    st.subheader("FDF Error")
+    st.dataframe(df_fdf_error, use_container_width=True)
 
 # =========================
 # EXPORT
@@ -315,7 +429,12 @@ if not df1.empty or not df2.empty or not df3.empty:
             df2.to_excel(writer, index=False, sheet_name='FDFTCAP')
         if not df3.empty:
             df3.to_excel(writer, index=False, sheet_name='VehicleSettingRequester')
+        if not df_error.empty:
+            df_error.to_excel(writer, index=False, sheet_name='Not Valid & Duplicate')
+        if not df_broken.empty:
+            df_broken.to_excel(writer, index=False, sheet_name='Device Broken')
+        if not df_fdf_error.empty:
+            df_fdf_error.to_excel(writer, index=False, sheet_name='FDF Error')
 
     output.seek(0)
-
     st.download_button("Download Excel", data=output, file_name="fdf-summary.xlsx")
