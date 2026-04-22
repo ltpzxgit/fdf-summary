@@ -59,7 +59,6 @@ st.markdown("""
 # =========================
 def card(title, value, is_red=False):
     card_class = "card-red" if is_red else "card"
-
     return f"""
     <div class="{card_class}">
         <div class="card-title">{title}</div>
@@ -340,7 +339,8 @@ if not df1.empty:
         df_broken["No."] = range(1, len(df_broken)+1)
         df_broken = df_broken[["No."] + [c for c in df_broken.columns if c != "No."]]
 
-        # ❌ ไม่ลบ df1 แล้ว
+        # 🔥 จุดแก้เดียว
+        df1 = df1[~df1["VIN"].isin(broken_vins)].copy()
 
 # =========================
 # FDF ERROR
